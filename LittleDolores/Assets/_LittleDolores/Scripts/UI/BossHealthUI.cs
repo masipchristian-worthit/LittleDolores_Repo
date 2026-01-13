@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-public class HealthUI : MonoBehaviour
+public class BossHealthUI : MonoBehaviour
 {
 
     [SerializeField] Image bossHealthFill;
