@@ -22,8 +22,6 @@ public class PlayerController2D : MonoBehaviour
     [Header("CHECKS")]
     [SerializeField] bool isGrounded;
     [SerializeField] bool isFacingRight;
-    [SerializeField] Transform groundCheck;
-    [SerializeField] float groundCkeckRadius = 0.2f;
     [SerializeField] LayerMask groundLayer;
 
 
