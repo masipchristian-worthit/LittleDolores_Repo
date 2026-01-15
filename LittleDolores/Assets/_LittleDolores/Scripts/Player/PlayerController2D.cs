@@ -5,14 +5,11 @@ using UnityEngine.InputSystem;
 public class PlayerController2D : MonoBehaviour
 {
     [Header("MOVEMENT CONFIG")]
+    [SerializeField] float speed = 10f;
     [SerializeField] float airSpeedDivisor = 2f;
 
-    [Header("DASH CONFIG")]
-    [SerializeField] float dashSpeed = 20f;
-    [SerializeField] float dashDuration = 0.2f;
-    [SerializeField] float dashCooldown = 1f;
-
     [Header("JUMP CONFIG")]
+    [SerializeField] float jumpForce = 15f;
     [SerializeField] float jumpCooldown = 0.2f;
     [SerializeField] float coyoteTime = 0.2f;
     [SerializeField] float jumpBufferTime = 0.2f;
@@ -27,43 +24,37 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] bool isFacingRight;
     [SerializeField] LayerMask groundLayer;
 
-    [Header("Attack Hitbox")]
-    [SerializeField] BoxCollider2D attackHitbox;
-
-    [Header("Interact Hitbox")]
-    [SerializeField] BoxCollider2D interactionCollider; // Collider que se activa al interactuar
-
-    public BoxCollider2D groundCheckCollider;
-    [SerializeField] Transform groundCheck;
-    [SerializeField] Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
+    [Header("INTERACT COLLIDER")]
+    [SerializeField] Collider2D interactCollider;     // Collider apagado por defecto
+    [SerializeField] float interactActiveTime = 1f;   // Activo durante 1 segundo
 
     Rigidbody2D playerRb;
     Animator anim;
+    PlayerInput input;
     Vector2 moveInput;
+    public BoxCollider2D groundCheckCollider;
 
-    bool canAttack = true;
+    bool canAttack;
     bool canJump = true;
     bool isJumpPressed;
     bool jumpRequest;
     bool isAttacking;
-    bool isDashing;
-    bool canDash = true;
 
     float coyoteTimeCounter;
     float jumpBufferCounter;
     float defaultGravity;
 
-    //IA DE ENEMIGOS
-    public bool IsAttacking => isAttacking;
-
-    void Awake()
+    private void Awake()
     {
         playerRb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
+        input = GetComponent<PlayerInput>();
         defaultGravity = playerRb.gravityScale;
+        canAttack = true;
 
-        if (interactionCollider != null)
-            interactionCollider.enabled = false; // Asegurarse que empieza apagado
+        // Aseguramos que el collider de interacciÃ³n empieza apagado
+        if (interactCollider != null)
+            interactCollider.enabled = false;
     }
 
     void Start()
@@ -73,47 +64,22 @@ public class PlayerController2D : MonoBehaviour
 
     void Update()
     {
-        float currentSpeed = 5f;
-        if (GameManager.Instance != null)
-            currentSpeed = GameManager.Instance.currentMoveSpeed;
+        IsGrounded();
+        ApplyGravityScale();
 
-        CheckGround();
-
-        coyoteTimeCounter = isGrounded ? coyoteTime : coyoteTimeCounter - Time.deltaTime;
-        if (jumpBufferCounter > 0) jumpBufferCounter -= Time.deltaTime;
-
-        if (jumpBufferCounter > 0 && coyoteTimeCounter > 0 && canJump && !isAttacking && !isDashing)
+        if (!isAttacking || !isGrounded)
         {
-            jumpRequest = true;
-            jumpBufferCounter = 0;
-        }
-
-        if (!isDashing)
-            ApplyGravityScale();
-
-        if (!isAttacking && !isDashing)
-        {
-            float targetSpeed = currentSpeed;
-            if (!isGrounded)
-                targetSpeed /= airSpeedDivisor;
-
-            playerRb.linearVelocity = new Vector2(moveInput.x * targetSpeed, playerRb.linearVelocity.y);
-
             if (moveInput.x > 0 && !isFacingRight) Flip();
             if (moveInput.x < 0 && isFacingRight) Flip();
         }
 
-        // ===== ANIMACIONES =====
-        if (anim != null)
-        {
-            anim.SetBool("Grounded", isGrounded);
-            anim.SetBool("IsRunning", moveInput.x != 0 && isGrounded);
-            anim.SetBool("IsAttacking", isAttacking);
-        }
+        CoyoteTime();
     }
 
     void FixedUpdate()
     {
+        Movement();
+
         if (jumpRequest)
         {
             Jump();
@@ -121,57 +87,126 @@ public class PlayerController2D : MonoBehaviour
         }
     }
 
+    void Flip()
+    {
+        Vector3 currentScale = transform.localScale;
+        currentScale.x *= -1;
+        transform.localScale = currentScale;
+        isFacingRight = !isFacingRight;
+    }
+
     void Jump()
     {
-        float currentJumpForce = 15f;
-        if (GameManager.Instance != null)
-            currentJumpForce = GameManager.Instance.currentJumpForce;
-
-        coyoteTimeCounter = 0;
-        jumpBufferCounter = 0;
+        coyoteTimeCounter = 0f;
+        jumpBufferCounter = 0f;
 
         playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, 0);
-        playerRb.AddForce(Vector2.up * currentJumpForce, ForceMode2D.Impulse);
+        playerRb.AddForce(Vector3.up * jumpForce, ForceMode2D.Impulse);
 
         canJump = false;
         Invoke(nameof(ResetJump), jumpCooldown);
-
-        if (anim != null)
-            anim.SetTrigger("Jump");
     }
 
-    void ResetJump() => canJump = true;
-
-    void Flip()
+    IEnumerator Attack()
     {
-        isFacingRight = !isFacingRight;
-        Vector3 s = transform.localScale;
-        s.x *= -1;
-        transform.localScale = s;
+        canAttack = false;
+        isAttacking = true;
+
+        yield return new WaitForSeconds(0.8f);
+
+        isAttacking = false;
+        canAttack = true;
+        yield return null;
+    }
+
+    void IsGrounded()
+    {
+        isGrounded = groundCheckCollider.IsTouchingLayers(groundLayer);
+    }
+
+    void Movement()
+    {
+        if (isAttacking)
+        {
+            playerRb.linearVelocity = new Vector2(0, playerRb.linearVelocity.y);
+            return;
+        }
+
+        float currentFrameSpeed = speed;
+
+        if (playerRb.linearVelocity.y < 0)
+        {
+            currentFrameSpeed = speed / airSpeedDivisor;
+        }
+
+        playerRb.linearVelocity = new Vector2(moveInput.x * currentFrameSpeed, playerRb.linearVelocity.y);
+    }
+
+    void ResetJump()
+    {
+        canJump = true;
+    }
+
+    void CoyoteTime()
+    {
+        if (isGrounded)
+            coyoteTimeCounter = coyoteTime;
+        else
+            coyoteTimeCounter -= Time.deltaTime;
+
+        if (jumpBufferCounter > 0)
+            jumpBufferCounter -= Time.deltaTime;
+
+        if (jumpBufferCounter > 0 && coyoteTimeCounter > 0 && canJump && !isAttacking)
+        {
+            jumpRequest = true;
+            jumpBufferCounter = 0f;
+        }
     }
 
     void ApplyGravityScale()
     {
         if (playerRb.linearVelocity.y < 0)
-            playerRb.gravityScale = defaultGravity * fallMultiplier;
+        {
+            playerRb.gravityScale = fallMultiplier;
+        }
         else if (playerRb.linearVelocity.y > 0 && !isJumpPressed)
-            playerRb.gravityScale = defaultGravity * lowJumpMultiplier;
+        {
+            playerRb.gravityScale = lowJumpMultiplier;
+        }
         else
+        {
             playerRb.gravityScale = defaultGravity;
+        }
 
         if (playerRb.linearVelocity.y < -maxFallSpeed)
+        {
             playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, -maxFallSpeed);
+        }
     }
 
-    void CheckGround()
+    // =========================
+    // INTERACTION
+    // =========================
+
+    void ActivateInteractCollider()
     {
-        if (groundCheck != null)
-            isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0, groundLayer);
-        else if (groundCheckCollider != null)
-            isGrounded = groundCheckCollider.IsTouchingLayers(groundLayer);
+        if (interactCollider == null) return;
+
+        interactCollider.enabled = true;
+        Invoke(nameof(DeactivateInteractCollider), interactActiveTime);
     }
 
-    // ===== INPUTS =====
+    void DeactivateInteractCollider()
+    {
+        if (interactCollider == null) return;
+
+        interactCollider.enabled = false;
+    }
+
+    // =========================
+    // INPUT METHODS
+    // =========================
 
     public void OnMove(InputAction.CallbackContext context)
     {
@@ -185,65 +220,25 @@ public class PlayerController2D : MonoBehaviour
             jumpBufferCounter = jumpBufferTime;
             isJumpPressed = true;
         }
+
         if (context.canceled)
+        {
             isJumpPressed = false;
+        }
     }
 
     public void OnAttack(InputAction.CallbackContext context)
     {
-        if (context.performed && isGrounded && canAttack && !isDashing)
+        if (context.performed && isGrounded && canAttack)
             StartCoroutine(Attack());
     }
 
-    IEnumerator Attack()
-    {
-        canAttack = false;
-        isAttacking = true;
-
-        if (anim != null)
-            anim.SetTrigger("Attack");
-
-        playerRb.linearVelocity = Vector2.zero;
-
-        // ACTIVAR HITBOX
-        if (attackHitbox != null)
-            attackHitbox.enabled = true;
-
-        yield return new WaitForSeconds(0.2f); // ventana de golpe
-
-        // DESACTIVAR HITBOX
-        if (attackHitbox != null)
-            attackHitbox.enabled = false;
-
-        yield return new WaitForSeconds(0.3f); // resto animación
-
-        isAttacking = false;
-        canAttack = true;
-    }
-
-    // ===== INTERACT =====
     public void OnInteract(InputAction.CallbackContext context)
     {
-        if (context.performed && interactionCollider != null && !interactionCollider.enabled)
+        if (context.performed && !isAttacking)
         {
-            StartCoroutine(ActivateColliderTemporarily());
-        }
-    }
-
-    IEnumerator ActivateColliderTemporarily()
-    {
-        interactionCollider.enabled = true;
-        yield return new WaitForSeconds(1f);
-        interactionCollider.enabled = false;
-    }
-
-    // Para ver el collider de interacción en la escena (opcional)
-    void OnDrawGizmosSelected()
-    {
-        if (interactionCollider != null)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireCube(interactionCollider.transform.position, interactionCollider.size);
+            ActivateInteractCollider();
+            Debug.Log("Collider de interacciÃ³n ACTIVADO durante 1 segundo");
         }
     }
 }

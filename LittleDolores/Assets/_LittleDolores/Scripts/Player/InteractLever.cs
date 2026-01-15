@@ -1,54 +1,37 @@
 using UnityEngine;
 
-public class SwitchObjects : MonoBehaviour
+public class InteractLever : MonoBehaviour
 {
     [Header("OBJECTS TO SWITCH")]
-    [SerializeField] GameObject objectOn;
-    [SerializeField] GameObject objectOff;
+    [SerializeField] GameObject LEVERON;   // El que empieza ENCENDIDO
+    [SerializeField] GameObject LEVEROFF;  // El que empieza APAGADO
 
     [Header("EXTRA OBJECT TO DISABLE")]
-    [SerializeField] GameObject extraObject;
+    [SerializeField] GameObject TABLE; // Objeto en otra zona que se apaga
 
-    bool hasActivated = false;
+    bool hasActivated = false; // Para que solo se active una vez (opcional)
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        // Detecta solo el collider de interacción del player
         if (other.CompareTag("PlayerInteract") && !hasActivated)
         {
             hasActivated = true;
-            Debug.Log("Trigger detectado por: " + other.name);
             Switch();
         }
     }
 
     void Switch()
     {
-        Debug.Log("Intentando apagar ON y encender OFF");
+        if (LEVERON != null)
+            LEVERON.SetActive(false);   // Apagar el que estaba encendido
 
-        if (objectOn != null)
-        {
-            Debug.Log("Apagando: " + objectOn.name);
-            objectOn.SetActive(false);
-        }
-        else
-        {
-            Debug.LogError("objectOn NO está asignado");
-        }
+        if (LEVEROFF != null)
+            LEVEROFF.SetActive(true);   // Encender el que estaba apagado
 
-        if (objectOff != null)
-        {
-            Debug.Log("Encendiendo: " + objectOff.name);
-            objectOff.SetActive(true);
-        }
-        else
-        {
-            Debug.LogError("objectOff NO está asignado");
-        }
+        if (TABLE != null)
+            TABLE.SetActive(false); // Apagar el objeto extra
 
-        if (extraObject != null)
-        {
-            Debug.Log("Apagando extra: " + extraObject.name);
-            extraObject.SetActive(false);
-        }
+        Debug.Log("Objetos intercambiados");
     }
 }
