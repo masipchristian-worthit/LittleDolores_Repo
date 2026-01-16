@@ -4,191 +4,230 @@ using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
-    // ===== SINGLETON ESTABLE =====
-    public static GameManager instance;
-    public static GameManager Instance
-    {
-        get
-        {
-            if (instance == null)
-            {
-                instance = FindFirstObjectByType<GameManager>();
-            }
-            return instance;
-        }
-    }
+    // ===== SINGLETON =====
+    public static GameManager Instance;
 
-    // ===== CONFIGURACIÓN DE JUEGO (ESTADÍSTICAS PERSISTENTES) =====
+    // ===== CONFIGURACIÓN JUGADOR =====
     [Header("Player Stats")]
-    public int playerHealth = 10;
-    public int playerDamage = 1;            // DAÑO TOTAL (ÚNICA FUENTE DE VERDAD)
-    public float currentJumpForce = 15f;    // SALTO TOTAL
-    public float currentMoveSpeed = 10f;    // VELOCIDAD TOTAL
-    public bool hasDashAbility = false;     // HABILIDAD DASH
+    public int maxHealth = 10;
+    public int currentHealth;
+    public Transform playerTransform;
 
-    public Transform playerTransform;       
-    public int playerPoints;
+    [Header("Regeneración de Vida")]
+    public float regenDelay = 4f;    // Tiempo sin daño para empezar a curar
+    public float regenRate = 1f;     // Tiempo entre curaciones (segundos)
+    private float lastDamageTime;
+    private float regenTimer;
+
+    // ===== PERSISTENCIA DE POWERUPS =====
+    // Variables globales que no se borran al reiniciar escena
+    [Header("Powerups Persistentes")]
+    public float currentJumpForce = 7f;   // Valor base editable
+    public float currentMoveSpeed = 5f;   // Valor base editable
+    public int bonusDamage = 0;
+    public bool hasDashAbility = false;
+
+    [Header("Configuración Powerups")]
+    public GameObject damageParticlePrefab; // Asigna el prefab de partículas aquí (aunque esté comentado el uso)
+
+    // ===== CONTROL DE ESCENAS & TIEMPO =====
+    [Header("Contrarreloj Escenas")]
+    [SerializeField] float sceneTimeLimit = 60f; // Tiempo para Aldea1/2
+    [SerializeField] GameObject gameOverPanel;   // Panel con fondo oscuro y botón Retry
+    [SerializeField] GameObject victoryPanel;    // Panel de "Keep Going"
     
-    // ===== CONFIGURACIÓN DEL BOSS =====
-    [Header("Boss Config")]
-    public string bossSceneName = "SCN_Boss";
-    public int bossMaxHealth = 20;           
-    public int bossCurrentHealth;              
-    public bool isBossActive = false;
-    public Transform bossTransform;
-
-    // ===== GLOBAL AI & ESCENA =====
-    [Header("Global AI State")]
-    public bool enemiesAreUnhappy = false;  
-    public int maxDefenders = 3;            
-    public int currentDefenders = 0;        
-    private HashSet<Transform> occupiedWeakSpots = new HashSet<Transform>();
-
-    // ===== TIMER DE ESCENAS =====
-    [Header("Scene Timer")]
-    public float sceneTimeLimit = 60f;
     private bool isTimerActive = false;
-    public float timeRemaining; // Reemplaza o se sincroniza con tu 'timeLeft' anterior
-    private bool firstKillTriggered = false;
-    
-    // Paneles UI (Asignar en Inspector)
-    [SerializeField] GameObject gameOverPanel;
-    [SerializeField] GameObject victoryPanel;
+    private float timeRemaining;
+    private bool levelCompleted = false;
 
+    // ===== INTELIGENCIA ARTIFICIAL =====
+    [Header("Global AI")]
+    public bool enemiesAreUnhappy = false;
+    public int maxDefenders = 3;
+    public int currentDefenders = 0;
+    
+    private HashSet<Transform> occupiedWeakSpots = new HashSet<Transform>();
     private List<GShroomEnemy> activeEnemies = new List<GShroomEnemy>();
+    private bool firstKillTriggered = false;
 
     private void Awake()
     {
-        if (instance == null)
+        if (Instance == null)
         {
-            instance = this;
+            Instance = this;
             DontDestroyOnLoad(gameObject);
+            InitializeGame();
         }
-        else if (instance != this)
+        else if (Instance != this)
         {
-            Debug.LogWarning("Se ha destruido un GameManager duplicado en: " + gameObject.name);
             Destroy(gameObject);
             return;
         }
-        
-        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void InitializeGame()
+    {
+        currentHealth = maxHealth;
+        FindPlayer();
+        SceneManager.sceneLoaded += OnSceneLoaded; // Suscribirse al evento de cambio de escena
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Reseteo de estados de nivel
+        // Al cargar escena, reiniciamos lógica de nivel PERO MANTENEMOS POWERUPS
         enemiesAreUnhappy = false;
         firstKillTriggered = false;
         isTimerActive = false;
-        currentDefenders = 0;
-        occupiedWeakSpots.Clear();
-        activeEnemies.Clear();
+        levelCompleted = false;
+        currentHealth = maxHealth; // Opcional: ¿Quieres resetear vida al reiniciar? Asumo que sí.
         
-        isBossActive = false;
-        bossCurrentHealth = bossMaxHealth;
-        bossTransform = null;
+        activeEnemies.Clear();
+        FindPlayer();
 
-        // Buscar player si se perdió la referencia
-        if (playerTransform == null)
-        {
-             GameObject p = GameObject.FindGameObjectWithTag("Player");
-             if(p != null) playerTransform = p.transform;
-        }
-
-        Time.timeScale = 1f;
+        // Asegurarse de que el tiempo esté normal (por si venimos de un pause)
+        Time.timeScale = 1f; 
         if(gameOverPanel) gameOverPanel.SetActive(false);
         if(victoryPanel) victoryPanel.SetActive(false);
     }
 
-    private void Update()
+    private void FindPlayer()
     {
-        if (playerHealth < 0) playerHealth = 0; // Cap de vida mínima
-        
-        // Timer de Escena
-        if (isTimerActive)
+        if (playerTransform == null)
         {
-            timeRemaining -= Time.deltaTime;
-            if (timeRemaining <= 0) TriggerGameOver();
+            GameObject p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null) playerTransform = p.transform;
         }
     }
 
-    // --- MÉTODOS DE POWERUPS (MODIFICAN VARIABLES CENTRALES) ---
-    public void UpgradeJump(float amount) { currentJumpForce += amount; }
-    public void UpgradeSpeed(float amount) { currentMoveSpeed += amount; }
-    public void UpgradeDamage(int amount) { playerDamage += amount; } // Suma directa
-    public void UnlockDash() { hasDashAbility = true; }
+    // Registro de enemigos para saber cuándo se acaban
+    public void RegisterEnemy(GShroomEnemy enemy)
+    {
+        if(!activeEnemies.Contains(enemy)) activeEnemies.Add(enemy);
+    }
 
-    // --- GESTIÓN DE DAÑO ---
+    public void UnregisterEnemy(GShroomEnemy enemy)
+    {
+        if(activeEnemies.Contains(enemy)) activeEnemies.Remove(enemy);
+        CheckWinCondition();
+    }
+
+    void Update()
+    {
+        if (playerTransform == null) FindPlayer();
+
+        HandleHealthRegen();
+        HandleSceneTimer();
+    }
+
+    // --- SISTEMA DE SALUD ---
     public void TakeDamage(int damage)
     {
-        playerHealth -= damage;
-        if (playerHealth <= 0) TriggerGameOver();
-    }
-
-    // --- GESTIÓN BOSS ---
-    public void RegisterBoss(Transform boss)
-    {
-        bossTransform = boss;
-        bossCurrentHealth = bossMaxHealth;
-        isBossActive = true;
-    }
-
-    public void DamageBoss(int damage)
-    {
-        bossCurrentHealth -= damage;
-        if (bossCurrentHealth <= 0) BossDefeated();
-    }
-
-    void BossDefeated()
-    {
-        bossCurrentHealth = 0;
-        isBossActive = false;
-        // Lógica de victoria aquí
-        if (victoryPanel) victoryPanel.SetActive(true);
-    }
-
-    // --- GESTIÓN ENEMIGOS & EVENTOS ---
-    public void RegisterEnemy(GShroomEnemy enemy) { if(!activeEnemies.Contains(enemy)) activeEnemies.Add(enemy); }
-    public void UnregisterEnemy(GShroomEnemy enemy) 
-    { 
-        if(activeEnemies.Contains(enemy)) activeEnemies.Remove(enemy);
+        currentHealth -= damage;
+        lastDamageTime = Time.time; // Reseteamos el contador de regen
         
-        // Condición de victoria de aldea
-        if (activeEnemies.Count == 0 && isTimerActive)
+        Debug.Log("Player Health: " + currentHealth);
+
+        if (currentHealth <= 0)
         {
-            isTimerActive = false;
-            if (victoryPanel) victoryPanel.SetActive(true);
+            TriggerGameOver();
         }
     }
 
+    void HandleHealthRegen()
+    {
+        if (currentHealth < maxHealth && currentHealth > 0)
+        {
+            if (Time.time - lastDamageTime > regenDelay)
+            {
+                regenTimer += Time.deltaTime;
+                if (regenTimer >= regenRate)
+                {
+                    currentHealth++;
+                    regenTimer = 0;
+                    Debug.Log("Regenerando vida... " + currentHealth);
+                }
+            }
+        }
+    }
+
+    // --- SISTEMA DE TIEMPO ---
     public void NotifyEnemyDeath()
     {
         if (!enemiesAreUnhappy) enemiesAreUnhappy = true;
-        
-        // Iniciar timer si es aldea y es la primera muerte
+
+        // Lógica de contador para Aldea1 y Aldea2
         string sceneName = SceneManager.GetActiveScene().name;
         if ((sceneName == "SCN_Aldea1" || sceneName == "SCN_Aldea2") && !firstKillTriggered)
         {
-            timeRemaining = sceneTimeLimit;
-            isTimerActive = true;
+            StartTimer();
             firstKillTriggered = true;
         }
+    }
+
+    void StartTimer()
+    {
+        timeRemaining = sceneTimeLimit;
+        isTimerActive = true;
+        Debug.Log("¡TIEMPO INICIADO! CORRE.");
+    }
+
+    void HandleSceneTimer()
+    {
+        if (isTimerActive && !levelCompleted)
+        {
+            timeRemaining -= Time.deltaTime;
+            // Aquí podrías actualizar una UI de texto con timeRemaining
+
+            if (timeRemaining <= 0)
+            {
+                TriggerGameOver();
+            }
+        }
+    }
+
+    void CheckWinCondition()
+    {
+        // Si no quedan enemigos y el temporizador estaba activo
+        if (activeEnemies.Count == 0 && isTimerActive)
+        {
+            LevelCompleted();
+        }
+    }
+
+    void LevelCompleted()
+    {
+        isTimerActive = false;
+        levelCompleted = true;
+        if (victoryPanel) victoryPanel.SetActive(true); // Mostrar "Keep Going..."
+        Debug.Log("NIVEL COMPLETADO");
     }
 
     void TriggerGameOver()
     {
         isTimerActive = false;
-        Time.timeScale = 0f;
+        Time.timeScale = 0f; // Pausa total
         if (gameOverPanel) gameOverPanel.SetActive(true);
     }
 
+    // Botón del UI "Try Again"
     public void RetryScene()
     {
         Time.timeScale = 1f;
+        // Recargar la escena actual. Los powerups se mantienen porque GM es DontDestroyOnLoad
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
-    // --- IA UTILS ---
+    // --- MÉTODOS POWERUPS ---
+    public void UpgradeJump(float amount) { currentJumpForce += amount; }
+    public void UpgradeSpeed(float amount) { currentMoveSpeed += amount; }
+    public void UpgradeDamage(int amount) 
+    { 
+        bonusDamage += amount;
+        // if(damageParticlePrefab) Instantiate(damageParticlePrefab, playerTransform); // Comentado por ahora
+    }
+    public void UnlockDash() { hasDashAbility = true; }
+
+    // --- GESTIÓN IA (Flanqueo y Defensa) ---
     public bool TryClaimWeakSpot(Transform spot) { if (occupiedWeakSpots.Contains(spot)) return false; occupiedWeakSpots.Add(spot); return true; }
     public void ReleaseWeakSpot(Transform spot) { if (spot != null && occupiedWeakSpots.Contains(spot)) occupiedWeakSpots.Remove(spot); }
     public bool TryJoinDefense() { if (currentDefenders < maxDefenders) { currentDefenders++; return true; } return false; }
