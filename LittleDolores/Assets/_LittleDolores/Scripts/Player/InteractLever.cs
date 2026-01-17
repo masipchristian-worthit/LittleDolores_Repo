@@ -1,37 +1,77 @@
 using UnityEngine;
 
-public class InteractLever : MonoBehaviour
+public class InteractButton : MonoBehaviour
 {
     [Header("OBJECTS TO SWITCH")]
-    [SerializeField] GameObject LEVERON;   // El que empieza ENCENDIDO
-    [SerializeField] GameObject LEVEROFF;  // El que empieza APAGADO
+    [SerializeField] GameObject objectOn;
+    [SerializeField] GameObject objectOff;
 
     [Header("EXTRA OBJECT TO DISABLE")]
-    [SerializeField] GameObject TABLE; // Objeto en otra zona que se apaga
+    [SerializeField] GameObject extraObjectToDisable;
 
-    bool hasActivated = false; // Para que solo se active una vez (opcional)
+    [Header("FEEDBACK AUDIO (AUDIO MANAGER)")]
+    [Tooltip("Índice del SFX en AudioManager (-1 para silencio)")]
+    [SerializeField] int sfxIndex = -1;
+
+    [Tooltip("Índice de la voz en AudioManager (-1 para silencio)")]
+    [SerializeField] int voiceLineIndex = -1;
+
+    [Tooltip("Delay antes de reproducir la voice line")]
+    [SerializeField] float voiceLineDelay = 1f;
+
+    [Header("FEEDBACK CÁMARA")]
+    [SerializeField] float shakeIntensity = 2f;
+    [SerializeField] float shakeDuration = 0.3f;
+
+    private bool hasActivated = false;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // Detecta solo el collider de interacción del player
         if (other.CompareTag("PlayerInteract") && !hasActivated)
         {
-            hasActivated = true;
-            Switch();
+            ActivateButton();
         }
     }
 
-    void Switch()
+    void ActivateButton()
     {
-        if (LEVERON != null)
-            LEVERON.SetActive(false);   // Apagar el que estaba encendido
+        hasActivated = true;
 
-        if (LEVEROFF != null)
-            LEVEROFF.SetActive(true);   // Encender el que estaba apagado
+        // 1. Switch de objetos
+        if (objectOn != null)
+            objectOn.SetActive(false);
 
-        if (TABLE != null)
-            TABLE.SetActive(false); // Apagar el objeto extra
+        if (objectOff != null)
+            objectOff.SetActive(true);
 
-        Debug.Log("Objetos intercambiados");
+        // 2. Objeto extra
+        if (extraObjectToDisable != null)
+            extraObjectToDisable.SetActive(false);
+
+        // 3. Audio
+        if (AudioManager.Instance != null)
+        {
+            if (sfxIndex >= 0)
+                AudioManager.Instance.PlaySFX(sfxIndex);
+
+            if (voiceLineIndex >= 0)
+                Invoke(nameof(PlayVoiceLine), voiceLineDelay);
+        }
+
+        // 4. Camera Shake
+        if (CameraShakeManager.Instance != null)
+        {
+            CameraShakeManager.Instance.ShakeCamera(shakeIntensity, shakeDuration);
+        }
+
+        Debug.Log($"InteractButton {gameObject.name} activado.");
+    }
+
+    void PlayVoiceLine()
+    {
+        if (AudioManager.Instance != null && voiceLineIndex >= 0)
+        {
+            AudioManager.Instance.PlayVoicelines(voiceLineIndex);
+        }
     }
 }
