@@ -6,7 +6,7 @@ public class BossHealthUI : MonoBehaviour
     [SerializeField] Image bossHealthFill;
     void Update()
     {
-        bossHealthFill.fillAmount = GameManager.Instance.bossHealth / GameManager.Instance.bossMaxHealth;
+        bossHealthFill.fillAmount = GameManager.Instance.bossCurrentHealth / GameManager.Instance.bossMaxHealth;
     }
 
 }
