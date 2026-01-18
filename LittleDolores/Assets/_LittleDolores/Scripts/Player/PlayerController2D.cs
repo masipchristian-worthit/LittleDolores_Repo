@@ -4,8 +4,6 @@ using UnityEngine.InputSystem;
 
 public class PlayerController2D : MonoBehaviour
 {
-    // NOTA: Velocidad y Salto se leen de GameManager
-
     [Header("MOVEMENT CONFIG")]
     [SerializeField] float airSpeedDivisor = 2f;
 
@@ -28,22 +26,19 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] bool isGrounded;
     [SerializeField] bool isFacingRight;
     [SerializeField] LayerMask groundLayer;
-    
-    // Check points
-    public BoxCollider2D groundCheckCollider; // Tu referencia actual
-    [SerializeField] Transform groundCheck;   // Opcional si prefieres usar transform
-    [SerializeField] Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
 
-    [Header("INTERACT COLLIDER")]
-    [SerializeField] Collider2D interactCollider;     
-    [SerializeField] float interactActiveTime = 1f;   
+    [Header("Attack Hitbox")]
+    [SerializeField] BoxCollider2D attackHitbox;
+
+    public BoxCollider2D groundCheckCollider;
+    [SerializeField] Transform groundCheck;
+    [SerializeField] Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
 
     Rigidbody2D playerRb;
     Animator anim;
-    PlayerInput input;
     Vector2 moveInput;
 
-    bool canAttack;
+    bool canAttack = true;
     bool canJump = true;
     bool isJumpPressed;
     bool jumpRequest;
@@ -55,18 +50,14 @@ public class PlayerController2D : MonoBehaviour
     float jumpBufferCounter;
     float defaultGravity;
 
-    // Getter para la IA
+    //IA DE ENEMIGOS
     public bool IsAttacking => isAttacking;
 
-    private void Awake()
+    void Awake()
     {
         playerRb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
-        input = GetComponent<PlayerInput>();
         defaultGravity = playerRb.gravityScale;
-        canAttack = true;
-
-        if (interactCollider != null) interactCollider.enabled = false;
     }
 
     void Start()
@@ -76,37 +67,42 @@ public class PlayerController2D : MonoBehaviour
 
     void Update()
     {
-        // LEER STATS DEL GAMEMANAGER
         float currentSpeed = 5f;
-        if (GameManager.Instance != null) currentSpeed = GameManager.Instance.currentMoveSpeed;
+        if (GameManager.Instance != null)
+            currentSpeed = GameManager.Instance.currentMoveSpeed;
 
-        IsGrounded();
-        
-        if (isGrounded) coyoteTimeCounter = coyoteTime;
-        else coyoteTimeCounter -= Time.deltaTime;
+        CheckGround();
 
+        coyoteTimeCounter = isGrounded ? coyoteTime : coyoteTimeCounter - Time.deltaTime;
         if (jumpBufferCounter > 0) jumpBufferCounter -= Time.deltaTime;
 
         if (jumpBufferCounter > 0 && coyoteTimeCounter > 0 && canJump && !isAttacking && !isDashing)
         {
             jumpRequest = true;
-            jumpBufferCounter = 0f;
+            jumpBufferCounter = 0;
         }
 
-        if (!isDashing) ApplyGravityScale();
+        if (!isDashing)
+            ApplyGravityScale();
 
         if (!isAttacking && !isDashing)
         {
-            // Movimiento
             float targetSpeed = currentSpeed;
-            if (playerRb.linearVelocity.y < 0 || !isGrounded) targetSpeed /= airSpeedDivisor;
-            
+            if (!isGrounded)
+                targetSpeed /= airSpeedDivisor;
+
             playerRb.linearVelocity = new Vector2(moveInput.x * targetSpeed, playerRb.linearVelocity.y);
 
             if (moveInput.x > 0 && !isFacingRight) Flip();
             if (moveInput.x < 0 && isFacingRight) Flip();
-            
-            if(anim != null) anim.SetBool("IsRunning", moveInput.x != 0);
+        }
+
+        // ===== ANIMACIONES =====
+        if (anim != null)
+        {
+            anim.SetBool("Grounded", isGrounded);
+            anim.SetBool("IsRunning", moveInput.x != 0 && isGrounded);
+            anim.SetBool("IsAttacking", isAttacking);
         }
     }
 
@@ -121,22 +117,24 @@ public class PlayerController2D : MonoBehaviour
 
     void Jump()
     {
-        // LEER STATS DEL GAMEMANAGER
         float currentJumpForce = 15f;
-        if (GameManager.Instance != null) currentJumpForce = GameManager.Instance.currentJumpForce;
+        if (GameManager.Instance != null)
+            currentJumpForce = GameManager.Instance.currentJumpForce;
 
-        coyoteTimeCounter = 0f;
-        jumpBufferCounter = 0f;
+        coyoteTimeCounter = 0;
+        jumpBufferCounter = 0;
 
         playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, 0);
-        playerRb.AddForce(Vector3.up * currentJumpForce, ForceMode2D.Impulse);
+        playerRb.AddForce(Vector2.up * currentJumpForce, ForceMode2D.Impulse);
 
         canJump = false;
         Invoke(nameof(ResetJump), jumpCooldown);
-        if(anim != null) anim.SetBool("Grounded", false);
+
+        if (anim != null)
+            anim.SetTrigger("Jump");
     }
 
-    void ResetJump() { canJump = true; }
+    void ResetJump() => canJump = true;
 
     void Flip()
     {
@@ -148,27 +146,26 @@ public class PlayerController2D : MonoBehaviour
 
     void ApplyGravityScale()
     {
-        if (playerRb.linearVelocity.y < 0) playerRb.gravityScale = defaultGravity * fallMultiplier;
-        else if (playerRb.linearVelocity.y > 0 && !isJumpPressed) playerRb.gravityScale = defaultGravity * lowJumpMultiplier;
-        else playerRb.gravityScale = defaultGravity;
+        if (playerRb.linearVelocity.y < 0)
+            playerRb.gravityScale = defaultGravity * fallMultiplier;
+        else if (playerRb.linearVelocity.y > 0 && !isJumpPressed)
+            playerRb.gravityScale = defaultGravity * lowJumpMultiplier;
+        else
+            playerRb.gravityScale = defaultGravity;
 
         if (playerRb.linearVelocity.y < -maxFallSpeed)
-             playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, -maxFallSpeed);
+            playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, -maxFallSpeed);
     }
 
-    void IsGrounded()
+    void CheckGround()
     {
         if (groundCheck != null)
             isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0, groundLayer);
         else if (groundCheckCollider != null)
             isGrounded = groundCheckCollider.IsTouchingLayers(groundLayer);
-            
-        if(anim != null) anim.SetBool("Grounded", isGrounded);
     }
 
-    // =========================
-    // INPUT METHODS
-    // =========================
+    // ===== INPUTS =====
 
     public void OnMove(InputAction.CallbackContext context)
     {
@@ -177,8 +174,13 @@ public class PlayerController2D : MonoBehaviour
 
     public void OnJump(InputAction.CallbackContext context)
     {
-        if (context.started) { jumpBufferCounter = jumpBufferTime; isJumpPressed = true; }
-        if (context.canceled) isJumpPressed = false;
+        if (context.started)
+        {
+            jumpBufferCounter = jumpBufferTime;
+            isJumpPressed = true;
+        }
+        if (context.canceled)
+            isJumpPressed = false;
     }
 
     public void OnAttack(InputAction.CallbackContext context)
@@ -187,81 +189,30 @@ public class PlayerController2D : MonoBehaviour
             StartCoroutine(Attack());
     }
 
-    public void OnInteract(InputAction.CallbackContext context)
-    {
-        if (context.performed && !isAttacking)
-        {
-            if (interactCollider != null) 
-            {
-                interactCollider.enabled = true;
-                Invoke(nameof(DeactivateInteractCollider), interactActiveTime);
-                Debug.Log("Interactuando...");
-            }
-        }
-    }
-
-    public void OnDash(InputAction.CallbackContext context)
-    {
-        if (context.performed && canDash && !isDashing)
-        {
-            if (GameManager.Instance != null && GameManager.Instance.hasDashAbility)
-            {
-                StartCoroutine(DashRoutine());
-            }
-        }
-    }
-
-    // =========================
-    // CORRUTINAS
-    // =========================
-
-    void DeactivateInteractCollider()
-    {
-        if (interactCollider != null) interactCollider.enabled = false;
-    }
-
     IEnumerator Attack()
     {
-        canAttack = false; isAttacking = true;
-        if(anim != null) anim.SetTrigger("Attack");
-        
-        playerRb.linearVelocity = Vector2.zero; // Frenar
-        yield return new WaitForSeconds(0.5f); // DuraciÃ³n ataque
-        
-        isAttacking = false; canAttack = true;
-    }
+        canAttack = false;
+        isAttacking = true;
 
-    IEnumerator DashRoutine()
-    {
-        canDash = false; isDashing = true;
-        
-        float originalGravity = playerRb.gravityScale;
-        playerRb.gravityScale = 0;
-        
-        float dir = isFacingRight ? 1 : -1;
-        if (moveInput.x != 0) dir = Mathf.Sign(moveInput.x);
+        if (anim != null)
+            anim.SetTrigger("Attack");
 
-        playerRb.linearVelocity = new Vector2(dir * dashSpeed, 0);
-
-        // Efecto Visual (Debe estar el script PlayerDashEffect en el player)
-        PlayerDashEffect effect = GetComponent<PlayerDashEffect>();
-        if (effect != null) effect.ShowDashTrail(dashDuration);
-
-        yield return new WaitForSeconds(dashDuration);
-
-        playerRb.gravityScale = originalGravity;
         playerRb.linearVelocity = Vector2.zero;
-        isDashing = false;
 
-        yield return new WaitForSeconds(dashCooldown);
-        canDash = true;
+        // ACTIVAR HITBOX
+        if (attackHitbox != null)
+            attackHitbox.enabled = true;
+
+        yield return new WaitForSeconds(0.2f); // ventana de golpe
+
+        // DESACTIVAR HITBOX
+        if (attackHitbox != null)
+            attackHitbox.enabled = false;
+
+        yield return new WaitForSeconds(0.3f); // resto animación
+
+        isAttacking = false;
+        canAttack = true;
     }
 
-    private void OnDrawGizmos()
-    {
-        if (groundCheck != null) {
-            Gizmos.color = Color.green;
-            Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
-        }
-    }
 }
