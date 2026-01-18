@@ -55,7 +55,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 0
+    filterMode: 1
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -93,7 +93,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 0
+    textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -149,10 +149,10 @@ TextureImporter:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 65
-        height: 36
-      alignment: 9
-      pivot: {x: 0.76, y: 0}
+        width: 66
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -169,12 +169,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_1
       rect:
         serializedVersion: 2
-        x: 100
+        x: 99
         y: 0
-        width: 61
-        height: 36
-      alignment: 9
-      pivot: {x: 0.81347954, y: 0.0000015166506}
+        width: 63
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -191,12 +191,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_2
       rect:
         serializedVersion: 2
-        x: 200
+        x: 199
         y: 0
-        width: 62
-        height: 36
-      alignment: 9
-      pivot: {x: 0.7992126, y: 0.0012505297}
+        width: 64
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -213,12 +213,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_3
       rect:
         serializedVersion: 2
-        x: 300
+        x: 299
         y: 0
-        width: 61
-        height: 35
-      alignment: 9
-      pivot: {x: 0.8227349, y: 0.0038589363}
+        width: 63
+        height: 36
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -235,12 +235,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_4
       rect:
         serializedVersion: 2
-        x: 404
+        x: 403
         y: 0
-        width: 57
-        height: 36
-      alignment: 9
-      pivot: {x: 0.76, y: 0}
+        width: 59
+        height: 37
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -257,12 +257,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_5
       rect:
         serializedVersion: 2
-        x: 508
+        x: 507
         y: 0
-        width: 92
-        height: 34
-      alignment: 9
-      pivot: {x: 0.4719026, y: -0.00000008355223}
+        width: 94
+        height: 35
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -279,12 +279,12 @@ TextureImporter:
       name: Atk_dolores-Sheet_6
       rect:
         serializedVersion: 2
-        x: 608
+        x: 607
         y: 0
-        width: 91
-        height: 35
-      alignment: 9
-      pivot: {x: 0.47766382, y: 0.0011781945}
+        width: 93
+        height: 36
+      alignment: 0
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -301,7 +301,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 9706e0788b907dd45a93eba011f34c78
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -309,9 +309,7 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries:
-      - key: SpriteEditor.SliceSettings
-        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.7599999904632568,"y":0.0},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":1,"spriteAlignment":9,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
+      entries: []
     nameFileIdTable:
       Atk_dolores-Sheet_0: 6540041986334650939
       Atk_dolores-Sheet_1: 8618503209962294411
