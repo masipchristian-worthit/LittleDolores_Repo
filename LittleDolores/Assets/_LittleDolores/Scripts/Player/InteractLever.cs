@@ -1,77 +1,54 @@
 using UnityEngine;
 
-public class InteractButton : MonoBehaviour
+public class SwitchObjects : MonoBehaviour
 {
     [Header("OBJECTS TO SWITCH")]
     [SerializeField] GameObject objectOn;
     [SerializeField] GameObject objectOff;
 
     [Header("EXTRA OBJECT TO DISABLE")]
-    [SerializeField] GameObject extraObjectToDisable;
+    [SerializeField] GameObject extraObject;
 
-    [Header("FEEDBACK AUDIO (AUDIO MANAGER)")]
-    [Tooltip("Índice del SFX en AudioManager (-1 para silencio)")]
-    [SerializeField] int sfxIndex = -1;
-
-    [Tooltip("Índice de la voz en AudioManager (-1 para silencio)")]
-    [SerializeField] int voiceLineIndex = -1;
-
-    [Tooltip("Delay antes de reproducir la voice line")]
-    [SerializeField] float voiceLineDelay = 1f;
-
-    [Header("FEEDBACK CÁMARA")]
-    [SerializeField] float shakeIntensity = 2f;
-    [SerializeField] float shakeDuration = 0.3f;
-
-    private bool hasActivated = false;
+    bool hasActivated = false;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (other.CompareTag("PlayerInteract") && !hasActivated)
         {
-            ActivateButton();
+            hasActivated = true;
+            Debug.Log("Trigger detectado por: " + other.name);
+            Switch();
         }
     }
 
-    void ActivateButton()
+    void Switch()
     {
-        hasActivated = true;
+        Debug.Log("Intentando apagar ON y encender OFF");
 
-        // 1. Switch de objetos
         if (objectOn != null)
+        {
+            Debug.Log("Apagando: " + objectOn.name);
             objectOn.SetActive(false);
+        }
+        else
+        {
+            Debug.LogError("objectOn NO está asignado");
+        }
 
         if (objectOff != null)
+        {
+            Debug.Log("Encendiendo: " + objectOff.name);
             objectOff.SetActive(true);
-
-        // 2. Objeto extra
-        if (extraObjectToDisable != null)
-            extraObjectToDisable.SetActive(false);
-
-        // 3. Audio
-        if (AudioManager.Instance != null)
+        }
+        else
         {
-            if (sfxIndex >= 0)
-                AudioManager.Instance.PlaySFX(sfxIndex);
-
-            if (voiceLineIndex >= 0)
-                Invoke(nameof(PlayVoiceLine), voiceLineDelay);
+            Debug.LogError("objectOff NO está asignado");
         }
 
-        // 4. Camera Shake
-        if (CameraShakeManager.Instance != null)
+        if (extraObject != null)
         {
-            CameraShakeManager.Instance.ShakeCamera(shakeIntensity, shakeDuration);
-        }
-
-        Debug.Log($"InteractButton {gameObject.name} activado.");
-    }
-
-    void PlayVoiceLine()
-    {
-        if (AudioManager.Instance != null && voiceLineIndex >= 0)
-        {
-            AudioManager.Instance.PlayVoicelines(voiceLineIndex);
+            Debug.Log("Apagando extra: " + extraObject.name);
+            extraObject.SetActive(false);
         }
     }
 }

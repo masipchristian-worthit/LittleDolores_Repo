@@ -30,6 +30,9 @@ public class PlayerController2D : MonoBehaviour
     [Header("Attack Hitbox")]
     [SerializeField] BoxCollider2D attackHitbox;
 
+    [Header("Interact Hitbox")]
+    [SerializeField] BoxCollider2D interactionCollider; // Collider que se activa al interactuar
+
     public BoxCollider2D groundCheckCollider;
     [SerializeField] Transform groundCheck;
     [SerializeField] Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
@@ -58,6 +61,9 @@ public class PlayerController2D : MonoBehaviour
         playerRb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         defaultGravity = playerRb.gravityScale;
+
+        if (interactionCollider != null)
+            interactionCollider.enabled = false; // Asegurarse que empieza apagado
     }
 
     void Start()
@@ -215,4 +221,29 @@ public class PlayerController2D : MonoBehaviour
         canAttack = true;
     }
 
+    // ===== INTERACT =====
+    public void OnInteract(InputAction.CallbackContext context)
+    {
+        if (context.performed && interactionCollider != null && !interactionCollider.enabled)
+        {
+            StartCoroutine(ActivateColliderTemporarily());
+        }
+    }
+
+    IEnumerator ActivateColliderTemporarily()
+    {
+        interactionCollider.enabled = true;
+        yield return new WaitForSeconds(1f);
+        interactionCollider.enabled = false;
+    }
+
+    // Para ver el collider de interacción en la escena (opcional)
+    void OnDrawGizmosSelected()
+    {
+        if (interactionCollider != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireCube(interactionCollider.transform.position, interactionCollider.size);
+        }
+    }
 }
