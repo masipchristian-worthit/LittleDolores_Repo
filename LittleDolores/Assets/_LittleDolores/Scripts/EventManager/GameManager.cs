@@ -29,13 +29,6 @@ public class GameManager : MonoBehaviour
     public Transform playerTransform;       
     public int playerPoints;
     
-    // ===== CONFIGURACIÓN DEL BOSS =====
-    [Header("Boss Config")]
-    public string bossSceneName = "SCN_Boss";
-    public int bossMaxHealth = 20;           
-    public int bossCurrentHealth;              
-    public bool isBossActive = false;
-    public Transform bossTransform;
 
     // ===== GLOBAL AI & ESCENA =====
     [Header("Global AI State")]
@@ -84,9 +77,6 @@ public class GameManager : MonoBehaviour
         occupiedWeakSpots.Clear();
         activeEnemies.Clear();
         
-        isBossActive = false;
-        bossCurrentHealth = bossMaxHealth;
-        bossTransform = null;
 
         // Buscar player si se perdió la referencia
         if (playerTransform == null)
@@ -125,27 +115,6 @@ public class GameManager : MonoBehaviour
         if (playerHealth <= 0) TriggerGameOver();
     }
 
-    // --- GESTIÓN BOSS ---
-    public void RegisterBoss(Transform boss)
-    {
-        bossTransform = boss;
-        bossCurrentHealth = bossMaxHealth;
-        isBossActive = true;
-    }
-
-    public void DamageBoss(int damage)
-    {
-        bossCurrentHealth -= damage;
-        if (bossCurrentHealth <= 0) BossDefeated();
-    }
-
-    void BossDefeated()
-    {
-        bossCurrentHealth = 0;
-        isBossActive = false;
-        // Lógica de victoria aquí
-        if (victoryPanel) victoryPanel.SetActive(true);
-    }
 
     // --- GESTIÓN ENEMIGOS & EVENTOS ---
     public void RegisterEnemy(GShroomEnemy enemy) { if(!activeEnemies.Contains(enemy)) activeEnemies.Add(enemy); }
