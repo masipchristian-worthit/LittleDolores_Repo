@@ -1,37 +1,54 @@
 using UnityEngine;
 
-public class InteractLever : MonoBehaviour
+public class SwitchObjects : MonoBehaviour
 {
     [Header("OBJECTS TO SWITCH")]
-    [SerializeField] GameObject LEVERON;   // El que empieza ENCENDIDO
-    [SerializeField] GameObject LEVEROFF;  // El que empieza APAGADO
+    [SerializeField] GameObject objectOn;
+    [SerializeField] GameObject objectOff;
 
     [Header("EXTRA OBJECT TO DISABLE")]
-    [SerializeField] GameObject TABLE; // Objeto en otra zona que se apaga
+    [SerializeField] GameObject extraObject;
 
-    bool hasActivated = false; // Para que solo se active una vez (opcional)
+    bool hasActivated = false;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // Detecta solo el collider de interacción del player
         if (other.CompareTag("PlayerInteract") && !hasActivated)
         {
             hasActivated = true;
+            Debug.Log("Trigger detectado por: " + other.name);
             Switch();
         }
     }
 
     void Switch()
     {
-        if (LEVERON != null)
-            LEVERON.SetActive(false);   // Apagar el que estaba encendido
+        Debug.Log("Intentando apagar ON y encender OFF");
 
-        if (LEVEROFF != null)
-            LEVEROFF.SetActive(true);   // Encender el que estaba apagado
+        if (objectOn != null)
+        {
+            Debug.Log("Apagando: " + objectOn.name);
+            objectOn.SetActive(false);
+        }
+        else
+        {
+            Debug.LogError("objectOn NO está asignado");
+        }
 
-        if (TABLE != null)
-            TABLE.SetActive(false); // Apagar el objeto extra
+        if (objectOff != null)
+        {
+            Debug.Log("Encendiendo: " + objectOff.name);
+            objectOff.SetActive(true);
+        }
+        else
+        {
+            Debug.LogError("objectOff NO está asignado");
+        }
 
-        Debug.Log("Objetos intercambiados");
+        if (extraObject != null)
+        {
+            Debug.Log("Apagando extra: " + extraObject.name);
+            extraObject.SetActive(false);
+        }
     }
 }

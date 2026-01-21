@@ -57,9 +57,11 @@ public class GShroomEnemy : MonoBehaviour
     bool isInAmbushPosition;
     bool isAggressive = false; 
     float nextDecisionTime;
-    float jumpCooldown = 0f;
-    float aggroTimer = 0f;
-    float evasionCooldown = 0f;
+
+    [Header("TIMERS")]
+    public float jumpCooldown = 0f;
+    public float aggroTimer = 0f;
+    public float evasionCooldown = 0f;
 
     void Awake()
     {
