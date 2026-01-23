@@ -4,26 +4,26 @@ using UnityEngine;
 public class GShroomEnemy : MonoBehaviour
 {
     [Header("ESTADÍSTICAS")]
-    [SerializeField] int health = 2;
+    [SerializeField] public int health = 2; 
     [SerializeField] int damageToPlayer = 1;
-    
+
     [Header("COMPORTAMIENTO DE MOVIMIENTO")]
     [SerializeField] float walkSpeed = 2.5f;
     [SerializeField] float runSpeed = 4.5f;
-    [SerializeField] float jumpForce = 8.5f; // Aumentado ligeramente para mejor escalada
-    [SerializeField] float maxJumpHeight = 4.0f; // Altura máxima estimada que puede saltar
-    [SerializeField] float platformSearchRadius = 10f; // Radio para buscar plataformas voladoras
+    [SerializeField] float jumpForce = 8.5f;
+    [SerializeField] float maxJumpHeight = 4.0f;
+    [SerializeField] float platformSearchRadius = 10f;
 
     [Header("IA DE COMBATE (BAITING)")]
     [SerializeField] float baitDistance = 3.5f;
-    [SerializeField] float aggroInterval = 3.0f; 
+    [SerializeField] float aggroInterval = 3.0f;
 
     [Header("PROBABILIDADES")]
     [Range(0, 100)] public int flankChance = 30;
 
     [Header("SENSORES")]
     [SerializeField] float detectionRange = 8f;
-    [SerializeField] float attackRange = 1.2f; 
+    [SerializeField] float attackRange = 1.2f;
     [SerializeField] Transform wallCheck;
     [SerializeField] Transform edgeCheck;
     [SerializeField] LayerMask groundLayer;
@@ -35,13 +35,13 @@ public class GShroomEnemy : MonoBehaviour
     public int sfxHitIdx = -1;
     public int sfxDeathIdx = -1;
 
-    // REFERENCIAS
+    // REFERENCIAS INTERNAS
     Rigidbody2D rb;
     Animator anim;
     Collider2D myCollider;
     Transform currentWeakSpot;
     Transform homePoint;
-    PlayerController2D playerScript; 
+    PlayerController2D playerScript;
 
     // ESTADOS
     enum State { Patrol, Chase, Attack, Flee, Flank, Defend, AmbushFall }
@@ -51,25 +51,44 @@ public class GShroomEnemy : MonoBehaviour
     // FLAGS & TIMERS
     bool isFacingRight = true;
     bool isGrounded;
+    bool wasGroundedLastFrame;
     bool isDead;
     bool isUnhappy;
     bool isWaitingAtEdge;
     bool isInAmbushPosition;
-    bool isAggressive = false; 
-    float nextDecisionTime;
+    bool isAggressive = false;
+    bool isBeingHit = false;
+    bool isLanding = false;
+    bool isJumping => rb.linearVelocity.y > 0.1f && !isGrounded;
+    bool isFalling => rb.linearVelocity.y < -0.1f && !isGrounded && !isJumping;
+    bool isMoving => rb.linearVelocity.x != 0;
 
-    [Header("TIMERS")]
+    float nextDecisionTime;
+    float stuckCheckTimer;
+
+
+    [Header("TIMERS (DEBUG)")]
     public float jumpCooldown = 0f;
     public float aggroTimer = 0f;
     public float evasionCooldown = 0f;
+    
+    [Header("ANIMATION DEBUG")]
+    public bool debugMoving;
+    public bool debugGrounded;
+    public bool debugJumping;
+    public bool debugFalling;
+    public bool debugLanding;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         myCollider = GetComponent<Collider2D>();
-        
-        if (anim) anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+
+        if (anim != null)
+        {
+            anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+        }
     }
 
     void Start()
@@ -78,71 +97,241 @@ public class GShroomEnemy : MonoBehaviour
         runSpeed += Random.Range(-0.5f, 0.5f);
 
         GameObject homeObj = GameObject.Find("protectHome");
-        if (homeObj) homePoint = homeObj.transform;
+        if (homeObj != null)
+        {
+            homePoint = homeObj.transform;
+        }
 
         if (GameManager.Instance != null)
         {
             isUnhappy = GameManager.Instance.enemiesAreUnhappy;
             GameManager.Instance.RegisterEnemy(this);
+
             if (GameManager.Instance.playerTransform != null)
+            {
                 playerScript = GameManager.Instance.playerTransform.GetComponent<PlayerController2D>();
+            }
         }
 
         rb.sleepMode = RigidbodySleepMode2D.NeverSleep;
-        if (Random.value > 0.5f) Flip();
+        
+        if (Random.value > 0.5f)
+        {
+            Flip();
+        }
     }
 
     void OnDestroy()
     {
-        if (GameManager.Instance != null) GameManager.Instance.UnregisterEnemy(this);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.UnregisterEnemy(this);
+        }
     }
 
     void Update()
     {
         if (isDead) return;
 
+        // Store previous ground state BEFORE checking
+        wasGroundedLastFrame = isGrounded;
         CheckGround();
+        
+        // Detect landing
+        if (!wasGroundedLastFrame && isGrounded && !isLanding && !isDead && !isBeingHit)
+        {
+            StartCoroutine(LandingRoutine());
+        }
+
         CheckGlobalState();
 
         if (jumpCooldown > 0) jumpCooldown -= Time.deltaTime;
         if (evasionCooldown > 0) evasionCooldown -= Time.deltaTime;
 
-        if (Time.time >= nextDecisionTime && !isWaitingAtEdge && currentState != State.Attack && currentState != State.AmbushFall)
+        // Can't think while busy
+        bool canThink = !isWaitingAtEdge && !isBeingHit && !isLanding && currentState != State.Attack && currentState != State.AmbushFall;
+        
+        if (Time.time >= nextDecisionTime && canThink)
         {
             Think();
-            nextDecisionTime = Time.time + 0.2f; 
+            nextDecisionTime = Time.time + 0.2f;
         }
 
-        HandleEnvironmentAnimations();
+        AnimationManager();
+        
+        if (!isBeingHit && !isLanding)
+        {
+            CheckIfStuck();
+        }
     }
 
     void FixedUpdate()
     {
-        if (isDead) return;
+        if (isDead || isBeingHit || isLanding) return;
+        
         ExecuteMovement();
     }
 
     // ====================================================
-    // LÓGICA DE MOVIMIENTO PRINCIPAL
+    // GESTOR DE ANIMACIONES - COMPLETELY REBUILT
+    // ====================================================
+    void AnimationManager()
+    {
+        if (anim == null) return;
+
+        // Always update Unhappy
+        anim.SetBool("Unhappy", isUnhappy);
+        
+        // Don't update if dead, being hit, or landing
+        if (isDead || isBeingHit || isLanding) return;
+
+        // 1. GROUNDED - Always accurate
+        if (isGrounded) anim.SetBool("Grounded", true);
+        else anim.SetBool("Grounded", false);
+
+        // 2. MOVING - Horizontal movement
+        if (isMoving)
+        {
+            anim.SetBool("Moving", true);
+        }
+        else
+        {
+            anim.SetBool("Moving", false);
+        }
+
+        // 3. JUMP - Going up and not grounded
+        if (isJumping) 
+        {
+            anim.SetBool("Jump", true);
+        }
+        else 
+        {
+            anim.SetBool("Jump", false);
+
+        }
+
+        if (rb.linearVelocity.y < -0.1f && !isGrounded && !isJumping) anim.SetBool("Falling", true);
+        else anim.SetBool("Falling", false);
+
+        // Debug values
+        debugMoving = isMoving;
+        debugGrounded = isGrounded;
+        debugJumping = isJumping;
+        debugFalling = isFalling;
+        debugLanding = isLanding;
+    }
+
+    // ====================================================
+    // LANDING ROUTINE - NEW
+    // ====================================================
+    IEnumerator LandingRoutine()
+    {
+        isLanding = true;
+        
+        // Stop horizontal movement during landing
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        
+        // Set all bools for landing state
+        anim.SetTrigger("Landing");
+        
+        // Wait for landing animation (adjust to your animation length)
+        yield return new WaitForSeconds(0.3f);
+        
+        isLanding = false;
+        
+        // Can jump again after landing
+        jumpCooldown = 0f;
+    }
+
+    // ====================================================
+    // COLLISION HANDLING
+    // ====================================================
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (isDead) return;
+
+        // Ground detection
+        if (groundLayer == (groundLayer | (1 << collision.gameObject.layer)))
+        {
+            isGrounded = true;
+            if (currentState == State.AmbushFall)
+            {
+                StartCoroutine(GasAttackRoutine());
+            }
+        }
+
+        // Other mushroom
+        if (collision.gameObject.GetComponent<GShroomEnemy>() != null)
+        {
+            Flip();
+            return;
+        }
+
+        // Player collision
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            bool playerStompsEnemy = false;
+            bool enemyStompsPlayer = false;
+
+            float myThreshold = myCollider.bounds.min.y + (myCollider.bounds.size.y * 0.7f);
+            Collider2D playerCol = collision.collider;
+            float playerThreshold = playerCol.bounds.min.y + (playerCol.bounds.size.y * 0.75f);
+
+            foreach (ContactPoint2D point in collision.contacts)
+            {
+                if (point.point.y > myThreshold && point.normal.y < -0.5f)
+                {
+                    playerStompsEnemy = true;
+                    break;
+                }
+                if (transform.position.y > playerCol.transform.position.y && point.point.y > playerThreshold)
+                {
+                    enemyStompsPlayer = true;
+                }
+            }
+
+            if (playerStompsEnemy)
+            {
+                Die();
+            }
+            else if (enemyStompsPlayer)
+            {
+                if (GameManager.Instance != null)
+                    GameManager.Instance.TakeDamage(damageToPlayer);
+                
+                StartCoroutine(GasAttackRoutine());
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 5f);
+            }
+            else
+            {
+                float dir = Mathf.Sign(transform.position.x - collision.transform.position.x);
+                rb.AddForce(new Vector2(dir * 5, 2), ForceMode2D.Impulse);
+                isAggressive = true;
+            }
+        }
+    }
+
+    // ====================================================
+    // MOVEMENT LOGIC
     // ====================================================
     void ExecuteMovement()
     {
-        // Estados estáticos
-        if (isWaitingAtEdge || currentState == State.Attack || (currentState == State.Flank && isInAmbushPosition))
+        bool isBusy = isWaitingAtEdge || currentState == State.Attack || (currentState == State.Flank && isInAmbushPosition);
+        
+        if (isBusy)
         {
             rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
             return;
         }
 
-        // Estado: Caída de Emboscada
         if (currentState == State.AmbushFall)
         {
-             if (GameManager.Instance.playerTransform != null)
-             {
-                 float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x);
-                 rb.linearVelocity = new Vector2(dir * (runSpeed * 0.8f), rb.linearVelocity.y);
-             }
-             return;
+            if (GameManager.Instance.playerTransform != null)
+            {
+                float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x);
+                rb.linearVelocity = new Vector2(dir * (runSpeed * 0.8f), rb.linearVelocity.y);
+            }
+            return;
         }
 
         switch (currentState)
@@ -162,70 +351,67 @@ public class GShroomEnemy : MonoBehaviour
                 if (GameManager.Instance.playerTransform != null)
                 {
                     float dir = Mathf.Sign(transform.position.x - GameManager.Instance.playerTransform.position.x);
-                    // Huir ignorando bordes
-                    MoveSmartTarget(transform.position + Vector3.right * dir * 5f, runSpeed * 1.2f, true); 
+                    MoveSmartTarget(transform.position + Vector3.right * dir * 5f, runSpeed * 1.2f, true);
                 }
                 break;
 
             case State.Flank:
                 if (currentWeakSpot != null)
                 {
-                    // Comprobar si hemos llegado
                     if (Vector2.Distance(transform.position, currentWeakSpot.position) < 0.5f)
                     {
                         isInAmbushPosition = true;
                         rb.linearVelocity = Vector2.zero;
                         FacePlayer();
                     }
-                    else 
+                    else
                     {
-                        // === LÓGICA DE PATHFINDING DE PLATAFORMAS ===
                         Vector2 target = currentWeakSpot.position;
-                        
-                        // Si el objetivo está muy alto, buscamos una plataforma intermedia
                         if (target.y > transform.position.y + maxJumpHeight)
                         {
                             Collider2D nextPlat = FindBestPlatformStep(target);
                             if (nextPlat != null)
                             {
-                                // Calculamos un punto objetivo sobre esa plataforma.
-                                // Intentamos alinear X con el objetivo final, pero dentro de los límites de la plataforma encontrada.
                                 float targetX = Mathf.Clamp(target.x, nextPlat.bounds.min.x, nextPlat.bounds.max.x);
-                                
-                                // Apuntamos a la parte superior de la plataforma
                                 target = new Vector2(targetX, nextPlat.bounds.max.y + 0.1f);
                             }
                         }
-
-                        // Moverse hacia el objetivo calculado (final o intermedio)
                         MoveSmartTarget(target, runSpeed, false);
                     }
                 }
                 break;
-                
+
             case State.Defend:
-                 if (homePoint != null) 
-                 {
-                     // Defend ignora precipicios para llegar a casa rápido
-                     MoveSmartTarget(homePoint.position, runSpeed, true);
-                 }
-                 break;
+                if (homePoint != null)
+                {
+                    MoveSmartTarget(homePoint.position, runSpeed, true);
+                }
+                break;
         }
     }
 
-    // --- LÓGICA DE PERSECUCIÓN Y EVASIÓN ---
     void BaitAndChaseLogic()
     {
+        if (GameManager.Instance.playerTransform == null) return;
+
         Vector2 playerPos = GameManager.Instance.playerTransform.position;
         float dist = Vector2.Distance(transform.position, playerPos);
-        
+
         aggroTimer += Time.deltaTime;
-        bool playerIsAttacking = playerScript != null && playerScript.IsAttacking;
-        
-        // Decidir si ponerse agresivo
+
+        bool playerIsAttacking = false;
+        if (playerScript != null)
+        {
+            playerIsAttacking = playerScript.IsAttacking;
+        }
+
         if (!isAggressive)
         {
-            if (aggroTimer > aggroInterval || dist < attackRange || (!playerIsAttacking && dist < baitDistance && aggroTimer > 1f))
+            bool timeOut = aggroTimer > aggroInterval;
+            bool tooClose = dist < attackRange;
+            bool tacticalOpportunity = !playerIsAttacking && dist < baitDistance && aggroTimer > 1f;
+
+            if (timeOut || tooClose || tacticalOpportunity)
             {
                 isAggressive = true;
             }
@@ -233,91 +419,51 @@ public class GShroomEnemy : MonoBehaviour
 
         if (isAggressive)
         {
-            // EVASIÓN: 1 de cada 3 veces, si está cerca, salta hacia atrás
             if (isGrounded && dist < 2.5f && evasionCooldown <= 0)
             {
-                if (Random.Range(0, 3) == 0) // 33% probabilidad
+                if (Random.Range(0, 3) == 0)
                 {
                     float dirToPlayer = Mathf.Sign(playerPos.x - transform.position.x);
                     rb.linearVelocity = new Vector2(-dirToPlayer * runSpeed, jumpForce * 0.8f);
                     CheckFlip(-dirToPlayer);
                     evasionCooldown = 2.0f;
-                    return; 
+                    return;
                 }
             }
 
-            // Persecución normal
             MoveSmartTarget(playerPos, runSpeed * 1.2f, false);
-            
+
             if (dist <= attackRange)
             {
-                StartCoroutine(AttackRoutine());
+                StartCoroutine(GasAttackRoutine());
                 isAggressive = false;
                 aggroTimer = 0f;
             }
         }
         else
         {
-            // Modo Bait (Mantener distancia)
             float dir = Mathf.Sign(playerPos.x - transform.position.x);
-            
-            if (dist > baitDistance + 1f) MoveSmartTarget(playerPos, runSpeed * 0.7f, false);
+
+            if (dist > baitDistance + 1f)
+            {
+                MoveSmartTarget(playerPos, runSpeed * 0.7f, false);
+            }
             else if (dist < baitDistance - 1f)
             {
-                // Retirada
                 rb.linearVelocity = new Vector2(-dir * runSpeed, rb.linearVelocity.y);
                 CheckFlip(-dir);
-                
-                // Si nos acorralan, atacar
-                if (Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer)) isAggressive = true;
+
+                if (Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer))
+                {
+                    isAggressive = true;
+                }
             }
             else
             {
-                // Idle tenso
                 rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
                 FacePlayer();
             }
         }
-    }
-
-    // ====================================================
-    // PATHFINDING & NAVEGACIÓN
-    // ====================================================
-    
-    // Busca la mejor plataforma intermedia para "escalar" hacia un objetivo alto
-    Collider2D FindBestPlatformStep(Vector2 finalTarget)
-    {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, platformSearchRadius, groundLayer);
-        Collider2D best = null;
-        float minDistance = Mathf.Infinity;
-        
-        // Detectar suelo actual para ignorarlo
-        RaycastHit2D groundInfo = Physics2D.Raycast(transform.position, Vector2.down, 1.0f, groundLayer);
-        Collider2D currentGround = groundInfo.collider;
-
-        foreach (var hit in hits)
-        {
-            if (hit == currentGround) continue; // No saltar sobre lo que ya piso
-            if (hit.gameObject == gameObject) continue; // Ignorarme a mí mismo
-
-            // Altura relativa: Debe estar por encima de mis pies y al alcance de mi salto
-            float heightDiff = hit.bounds.max.y - transform.position.y;
-
-            // Filtro: Plataforma más alta que yo, pero alcanzable
-            if (heightDiff > 0.5f && heightDiff <= maxJumpHeight)
-            {
-                // Puntuación: Cuánto me acerca esta plataforma al objetivo final
-                // Usamos el punto de la plataforma más cercano al objetivo final para calcular la distancia
-                float dist = Vector2.Distance(hit.bounds.ClosestPoint(finalTarget), finalTarget);
-                
-                if (dist < minDistance)
-                {
-                    minDistance = dist;
-                    best = hit;
-                }
-            }
-        }
-        return best;
     }
 
     void MoveSmartTarget(Vector2 targetPos, float speed, bool ignoreLedges)
@@ -326,7 +472,6 @@ public class GShroomEnemy : MonoBehaviour
         float yDist = targetPos.y - transform.position.y;
         float dir = Mathf.Sign(xDist);
 
-        // Movimiento Horizontal
         if (Mathf.Abs(xDist) > 0.2f)
         {
             rb.linearVelocity = new Vector2(dir * speed, rb.linearVelocity.y);
@@ -334,41 +479,46 @@ public class GShroomEnemy : MonoBehaviour
         }
         else
         {
-            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            if (Mathf.Abs(yDist) < 1.0f)
+            {
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            }
         }
 
-        // --- LÓGICA DE SALTOS (Paredes y Plataformas Voladoras) ---
         Collider2D wallHit = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
-        bool wallAhead = wallHit != null && !wallHit.CompareTag("Player") && wallHit.gameObject != gameObject;
+        bool wallAhead = false;
+        
+        if (wallHit != null)
+        {
+             if (!wallHit.CompareTag("Player") && wallHit.gameObject != gameObject)
+             {
+                 wallAhead = true;
+             }
+        }
+
         bool ledgeAhead = !Physics2D.OverlapCircle(edgeCheck.position, edgeCheckRadius, groundLayer);
 
-        if (isGrounded && jumpCooldown <= 0)
+        if (isGrounded && jumpCooldown <= 0 && !isLanding)
         {
-            // A) SALTO POR OBSTÁCULO (PARED)
             if (wallAhead)
             {
                 Jump();
             }
-            // B) SALTO POR OBJETIVO ALTO (Plataforma Voladora o Escalada)
-            // Si el objetivo está arriba (> 1.0f) y NO hay pared, pero estamos alineados en X (debajo de la plataforma)
             else if (yDist > 1.0f)
             {
                 bool isAlignedUnderTarget = Mathf.Abs(xDist) < 0.8f;
                 
-                // Saltamos si hay precipicio (para cruzar) O si hay pared O si estamos justo debajo del objetivo
-                if (ledgeAhead || wallAhead || isAlignedUnderTarget) 
+                if (ledgeAhead || wallAhead || isAlignedUnderTarget)
                 {
                     Jump();
                 }
             }
-            // C) BAJAR PLATAFORMA (Atravesar hacia abajo)
             else if (yDist < -1.5f && Mathf.Abs(xDist) < 1.5f)
             {
                 StartCoroutine(DisableCollisionRoutine());
             }
 
-            // --- PROTECCIÓN DE CAÍDAS (Frenar en borde) ---
-            if (ledgeAhead && !ignoreLedges && yDist < 0.5f) // Solo frena si el objetivo no está abajo
+            if (ledgeAhead && !ignoreLedges && yDist < 0.5f)
             {
                 rb.linearVelocity = Vector2.zero;
             }
@@ -379,11 +529,22 @@ public class GShroomEnemy : MonoBehaviour
     {
         Collider2D wallHit = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
         bool floorHit = Physics2D.OverlapCircle(edgeCheck.position, edgeCheckRadius, groundLayer);
-        bool hitRealWall = wallHit != null && !wallHit.CompareTag("Player") && wallHit.gameObject != gameObject;
+        
+        bool hitRealWall = false;
+        if (wallHit != null)
+        {
+            if (!wallHit.CompareTag("Player") && wallHit.gameObject != gameObject)
+            {
+                hitRealWall = true;
+            }
+        }
 
         if (hitRealWall || !floorHit)
         {
-            if (!isWaitingAtEdge) StartCoroutine(WaitAndTurnRoutine());
+            if (!isWaitingAtEdge)
+            {
+                StartCoroutine(WaitAndTurnRoutine());
+            }
         }
         else
         {
@@ -392,194 +553,334 @@ public class GShroomEnemy : MonoBehaviour
         }
     }
 
-    // ====================================================
-    // COLISIONES & COMBATE
-    // ====================================================
-    private void OnCollisionEnter2D(Collision2D collision)
+    void CheckIfStuck()
     {
-        if (isDead) return;
-
-        if (groundLayer == (groundLayer | (1 << collision.gameObject.layer)))
+        bool shouldBeMoving = currentState == State.Patrol || currentState == State.Chase;
+        
+        if (shouldBeMoving && !isWaitingAtEdge && !isAggressive)
         {
-            isGrounded = true;
-            if (currentState == State.AmbushFall) StartCoroutine(AttackRoutine());
-        }
-
-        if (collision.gameObject.CompareTag("Player"))
-        {
-            bool playerStompsEnemy = false;
-            bool enemyStompsPlayer = false;
-
-            // Definición de hitboxes físicas para el pisotón
-            float myTop = myCollider.bounds.max.y;
-            float myHeight = myCollider.bounds.size.y;
-            float myThreshold = myCollider.bounds.min.y + (myHeight * 0.7f); // 70% altura
-
-            Collider2D playerCol = collision.collider;
-            float playerThreshold = playerCol.bounds.min.y + (playerCol.bounds.size.y * 0.75f); // 75% altura player
-
-            foreach (ContactPoint2D point in collision.contacts)
+            if (Mathf.Abs(rb.linearVelocity.x) < 0.1f && isGrounded)
             {
-                if (point.point.y > myThreshold && point.normal.y < -0.5f) { playerStompsEnemy = true; break; }
-                if (transform.position.y > playerCol.transform.position.y && point.point.y > playerThreshold) { enemyStompsPlayer = true; }
-            }
-
-            if (playerStompsEnemy) 
-            { 
-                Die(); 
-            }
-            else if (enemyStompsPlayer) 
-            {
-                // DAÑO SOLO SI CAE ENCIMA (EMBOSCADA)
-                GameManager.Instance.TakeDamage(damageToPlayer);
-                StartCoroutine(AttackRoutine());
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 5f); // Rebote
+                stuckCheckTimer += Time.deltaTime;
+                if (stuckCheckTimer > 0.5f)
+                {
+                    if (Random.value > 0.5f && !isLanding) Jump(); 
+                    else Flip();
+                    stuckCheckTimer = 0f;
+                }
             }
             else
             {
-                // CHOQUE LATERAL: NO DAÑO, EMPUJE Y AGRESIVIDAD
-                float dir = Mathf.Sign(transform.position.x - collision.transform.position.x);
-                rb.AddForce(new Vector2(dir * 5, 2), ForceMode2D.Impulse);
-                isAggressive = true;
+                stuckCheckTimer = 0f;
             }
         }
     }
 
-    IEnumerator AttackRoutine()
+
+    // ====================================================
+    // DAMAGE & DEATH - FIXED
+    // ====================================================
+    public void TakeDamage(int damage)
+    {
+        if (isDead || isBeingHit) return;
+
+        health -= damage;
+        
+        if (health <= 0)
+        {
+            Die();
+        }
+        else
+        {
+            // Esto es lo que pedías: dispara el trigger Hit
+            StartCoroutine(HitRoutine()); 
+        }
+    }
+
+IEnumerator HitRoutine()
+{
+    isBeingHit = true;
+    isLanding = false;
+    
+    // 1. DETENCIÓN FÍSICA TOTAL
+    rb.linearVelocity = Vector2.zero;
+    
+    // 2. CORRECCIÓN CRÍTICA: Apagar parámetros que causan transiciones no deseadas
+    // Si no hacemos esto, el Animator intentará volver a "Walk" en el frame 1 del golpe
+    anim.SetBool("Moving", false); 
+    anim.SetBool("Jump", false);
+    anim.SetBool("Falling", false);
+    anim.SetBool("Grounded", true); // Asegurar que no crea que está cayendo
+
+    // 3. Disparar animación
+    anim.SetTrigger("Hit");
+    
+   AudioManager.Instance.PlaySFX(-1);
+
+    // 4. Esperar la duración de la animación (ajustar este tiempo a lo que dure tu clip 'Kback')
+    yield return new WaitForSeconds(0.2f); 
+
+    isBeingHit = false;
+    // Al salir, el Update() normal retomará el control de las animaciones
+}
+
+    void Die()
+    {
+        if (isDead) return;
+
+        isDead = true;
+        isBeingHit = false;
+        isLanding = false;
+        
+        // Reset ALL animation bools
+        anim.SetBool("Moving", false);
+        anim.SetBool("Jump", false);
+        anim.SetBool("Falling", false);
+        anim.SetBool("Grounded", true);
+        anim.SetBool("Unhappy", false);
+        
+        // Trigger death
+        anim.SetTrigger("Death");
+
+        rb.linearVelocity = Vector2.zero;
+        rb.gravityScale = 0;
+        myCollider.enabled = false;
+
+        ReleaseCurrentSpot();
+        
+        if (GameManager.Instance != null) GameManager.Instance.NotifyEnemyDeath();
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxDeathIdx);
+
+        Destroy(gameObject, 2f);
+    }
+
+    IEnumerator GasAttackRoutine()
     {
         currentState = State.Attack;
         rb.linearVelocity = Vector2.zero;
+        
+        anim.SetBool("Moving", false);
         anim.SetTrigger("Gas");
-        if (AudioManager.Instance) AudioManager.Instance.PlaySFX(sfxAttackIdx);
         
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxAttackIdx);
+
         yield return new WaitForSeconds(1.0f);
-        
+
         if (!isDead)
         {
             ReleaseCurrentSpot();
             ChangeState(State.Chase);
-            isAggressive = false; 
+            isAggressive = false;
             aggroTimer = 0f;
         }
     }
 
     // ====================================================
-    // UTILIDADES
+    // UTILITY METHODS
     // ====================================================
-    public void OrderAmbushAttack() 
-    { 
-        if(currentState == State.Flank && isInAmbushPosition) 
-        { 
-            StopAllCoroutines(); 
-            isWaitingAtEdge = false; 
-            float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x); 
-            rb.linearVelocity = new Vector2(dir * runSpeed * 1.5f, -6f); 
-            ChangeState(State.AmbushFall); 
-        } 
+    Collider2D FindBestPlatformStep(Vector2 finalTarget)
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, platformSearchRadius, groundLayer);
+        Collider2D best = null;
+        float minDistance = Mathf.Infinity;
+
+        RaycastHit2D groundInfo = Physics2D.Raycast(transform.position, Vector2.down, 1.0f, groundLayer);
+        Collider2D currentGround = groundInfo.collider;
+
+        foreach (var hit in hits)
+        {
+            if (hit == currentGround) continue;
+            if (hit.gameObject == gameObject) continue;
+
+            float heightDiff = hit.bounds.max.y - transform.position.y;
+            if (heightDiff > 0.5f && heightDiff <= maxJumpHeight)
+            {
+                float dist = Vector2.Distance(hit.bounds.ClosestPoint(finalTarget), finalTarget);
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    best = hit;
+                }
+            }
+        }
+        return best;
     }
 
-    void Jump() 
-    { 
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce); 
-        jumpCooldown = 0.5f; 
-        isGrounded = false; 
-        anim.SetBool("Grounded", false); 
+    public void OrderAmbushAttack()
+    {
+        if (currentState == State.Flank && isInAmbushPosition)
+        {
+            StopAllCoroutines();
+            isWaitingAtEdge = false;
+            
+            float dir = 0;
+            if (GameManager.Instance.playerTransform != null)
+                dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x);
+            
+            rb.linearVelocity = new Vector2(dir * runSpeed * 1.5f, -6f);
+            ChangeState(State.AmbushFall);
+        }
     }
 
-    IEnumerator WaitAndTurnRoutine() 
-    { 
-        isWaitingAtEdge = true; 
-        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y); 
-        yield return new WaitForSeconds(Random.Range(1.0f, 2.0f)); 
-        Flip(); 
-        isWaitingAtEdge = false; 
+    void Jump()
+    {
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        jumpCooldown = 1.0f; // Prevent jumping again until landing
+        isGrounded = false;
+        isLanding = false;
     }
 
-    IEnumerator DisableCollisionRoutine() 
-    { 
-        RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, 1.5f, groundLayer); 
-        if (hit.collider != null) 
-        { 
-            Physics2D.IgnoreCollision(myCollider, hit.collider, true); 
-            yield return new WaitForSeconds(0.4f); 
-            Physics2D.IgnoreCollision(myCollider, hit.collider, false); 
-        } 
+    IEnumerator WaitAndTurnRoutine()
+    {
+        isWaitingAtEdge = true;
+        rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        yield return new WaitForSeconds(Random.Range(1.0f, 2.0f));
+        Flip();
+        isWaitingAtEdge = false;
     }
 
-    void CheckGround() { isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundLayer); }
-    void CheckGlobalState() { if (!isUnhappy && GameManager.Instance.enemiesAreUnhappy) isUnhappy = true; }
-    void CheckFlip(float direction) { if (direction > 0 && !isFacingRight) Flip(); else if (direction < 0 && isFacingRight) Flip(); }
-    void Flip() { isFacingRight = !isFacingRight; Vector3 scale = transform.localScale; scale.x *= -1; transform.localScale = scale; }
-    void FacePlayer() { if(GameManager.Instance.playerTransform != null) { float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x); CheckFlip(dir); } }
-    
-    Transform FindBestWeakSpot() 
-    { 
-        GameObject[] spots = GameObject.FindGameObjectsWithTag("WeakSpot"); 
-        if (spots == null) return null; 
-        Transform best = null; 
-        float minDist = 50f; 
-        foreach (GameObject go in spots) { 
-            float d = Vector2.Distance(transform.position, go.transform.position); 
-            // Buscar spots altos
-            if (d < minDist && go.transform.position.y >= transform.position.y - 0.5f) { 
-                minDist = d; 
-                best = go.transform; 
-            } 
-        } 
-        return best; 
+    IEnumerator DisableCollisionRoutine()
+    {
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, Vector2.down, 1.5f, groundLayer);
+        if (hit.collider != null)
+        {
+            Physics2D.IgnoreCollision(myCollider, hit.collider, true);
+            yield return new WaitForSeconds(0.4f);
+            Physics2D.IgnoreCollision(myCollider, hit.collider, false);
+        }
     }
 
-    void ReleaseCurrentSpot() { if (currentWeakSpot != null) { GameManager.Instance.ReleaseWeakSpot(currentWeakSpot); currentWeakSpot = null; } isInAmbushPosition = false; }
-    void ChangeState(State newState) { if (currentState == newState) return; currentState = newState; }
-    void HandleEnvironmentAnimations() { bool isMoving = Mathf.Abs(rb.linearVelocity.x) > 0.1f; anim.SetBool("Moving", isMoving); anim.SetBool("Grounded", isGrounded); anim.SetBool("Unhappy", isUnhappy); }
-    public void TakeDamage(int damage) { if (isDead) return; health -= damage; anim.SetTrigger("Hit"); if (AudioManager.Instance) AudioManager.Instance.PlaySFX(sfxHitIdx); if (health <= 0) Die(); }
-    
-    void Die() 
-    { 
-        if (isDead) return; 
-        isDead = true; 
-        anim.SetTrigger("Death"); 
-        rb.linearVelocity = Vector2.zero; 
-        rb.gravityScale = 0; 
-        GetComponent<Collider2D>().enabled = false; 
-        ReleaseCurrentSpot(); 
-        GameManager.Instance.NotifyEnemyDeath(); 
-        if (AudioManager.Instance) AudioManager.Instance.PlaySFX(sfxDeathIdx); 
-        Destroy(gameObject, 2f); 
+    void CheckGround()
+    {
+        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundLayer);
     }
 
-    void Think() 
-    { 
-        if (GameManager.Instance.playerTransform == null) return; 
-        float dist = Vector2.Distance(transform.position, GameManager.Instance.playerTransform.position); 
-        
-        if (isUnhappy && dist <= attackRange) { ChangeState(State.Attack); return; } 
-        
-        if (currentState == State.Flank && currentWeakSpot != null) { 
-            if (dist < 3f && !isInAmbushPosition) { ReleaseCurrentSpot(); ChangeState(State.Chase); } 
-            return; 
-        } 
-        
-        if (isUnhappy) { 
-            if (currentState != State.Flank && Random.Range(0, 100) < flankChance) { 
-                Transform spot = FindBestWeakSpot(); 
-                if (spot != null && GameManager.Instance.TryClaimWeakSpot(spot)) { 
-                    currentWeakSpot = spot; 
-                    ChangeState(State.Flank); 
-                    return; 
-                } 
-            } 
-            if (dist < detectionRange) ChangeState(State.Chase); 
-            else ChangeState(State.Patrol); 
-        } else { 
-            ChangeState(State.Patrol); 
-        } 
+    void CheckGlobalState()
+    {
+        if (!isUnhappy && GameManager.Instance != null)
+        {
+            if (GameManager.Instance.enemiesAreUnhappy) isUnhappy = true;
+        }
     }
 
-    private void OnDrawGizmos() 
-    { 
-        if (wallCheck) { Gizmos.color = Color.red; Gizmos.DrawWireCube(wallCheck.position, new Vector3(wallCheckSize.x, wallCheckSize.y, 1)); } 
-        if (edgeCheck) { Gizmos.color = Color.blue; Gizmos.DrawWireSphere(edgeCheck.position, edgeCheckRadius); }
-        Gizmos.color = Color.yellow; Gizmos.DrawWireSphere(transform.position, platformSearchRadius);
+    void CheckFlip(float direction)
+    {
+        if (direction > 0 && !isFacingRight) Flip();
+        else if (direction < 0 && isFacingRight) Flip();
+    }
+
+    void Flip()
+    {
+        isFacingRight = !isFacingRight;
+        Vector3 scale = transform.localScale;
+        scale.x *= -1;
+        transform.localScale = scale;
+    }
+
+    void FacePlayer()
+    {
+        if (GameManager.Instance.playerTransform != null)
+        {
+            float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x);
+            CheckFlip(dir);
+        }
+    }
+
+    Transform FindBestWeakSpot()
+    {
+        GameObject[] spots = GameObject.FindGameObjectsWithTag("WeakSpot");
+        if (spots == null) return null;
+
+        Transform best = null;
+        float minDist = 50f;
+
+        foreach (GameObject go in spots)
+        {
+            float d = Vector2.Distance(transform.position, go.transform.position);
+            if (d < minDist && go.transform.position.y >= transform.position.y - 0.5f)
+            {
+                minDist = d;
+                best = go.transform;
+            }
+        }
+        return best;
+    }
+
+    void ReleaseCurrentSpot()
+    {
+        if (currentWeakSpot != null)
+        {
+            if (GameManager.Instance != null) GameManager.Instance.ReleaseWeakSpot(currentWeakSpot);
+            currentWeakSpot = null;
+        }
+        isInAmbushPosition = false;
+    }
+
+    void ChangeState(State newState)
+    {
+        if (currentState == newState) return;
+        currentState = newState;
+    }
+
+    void Think()
+    {
+        if (GameManager.Instance.playerTransform == null) return;
+
+        float dist = Vector2.Distance(transform.position, GameManager.Instance.playerTransform.position);
+
+        if (isUnhappy && dist <= attackRange)
+        {
+            ChangeState(State.Attack);
+            return;
+        }
+
+        if (currentState == State.Flank && currentWeakSpot != null)
+        {
+            if (dist < 3f && !isInAmbushPosition)
+            {
+                ReleaseCurrentSpot();
+                ChangeState(State.Chase);
+            }
+            return;
+        }
+
+        if (isUnhappy)
+        {
+            if (currentState != State.Flank && Random.Range(0, 100) < flankChance)
+            {
+                Transform spot = FindBestWeakSpot();
+                if (spot != null)
+                {
+                    if (GameManager.Instance.TryClaimWeakSpot(spot))
+                    {
+                        currentWeakSpot = spot;
+                        ChangeState(State.Flank);
+                        return;
+                    }
+                }
+            }
+            if (dist < detectionRange) ChangeState(State.Chase);
+            else ChangeState(State.Patrol);
+        }
+        else
+        {
+            ChangeState(State.Patrol);
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (wallCheck)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireCube(wallCheck.position, new Vector3(wallCheckSize.x, wallCheckSize.y, 1));
+        }
+        if (edgeCheck)
+        {
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireSphere(edgeCheck.position, edgeCheckRadius);
+        }
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, platformSearchRadius);
     }
 }

@@ -16,18 +16,20 @@ public class Boss : MonoBehaviour
         currentLife = maxLife;
     }
 
-    void OnTriggerStay2D(Collider2D other)
+    void OnTriggerEnter2D(Collider2D other)
     {
-        // Debug cuando el collider del ataque est· tocando al boss
-        if (other == playerAttackCollider)
+        // Debug cuando el collider del ataque est√© tocando al boss
+        if (other.CompareTag("PlayerAttack"))
         {
             Debug.Log("Hitbox del jugador detectada");
-
+            TakeDamage(1);
+            /*
             if (!hit)
             {
                 hit = true;
                 TakeDamage(1);
             }
+            */
         }
     }
 
