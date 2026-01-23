@@ -1,54 +1,61 @@
 using UnityEngine;
 
-public class SwitchObjects : MonoBehaviour
+public class LeverSwitch : MonoBehaviour
 {
-    [Header("OBJECTS TO SWITCH")]
-    [SerializeField] GameObject objectOn;
-    [SerializeField] GameObject objectOff;
+    [Header("Lever Objects")]
+    [SerializeField] GameObject leverOffObject;
+    [SerializeField] GameObject leverOnObject;
 
-    [Header("EXTRA OBJECT TO DISABLE")]
-    [SerializeField] GameObject extraObject;
+    [Header("Objects To Control")]
+    [SerializeField] GameObject objectToTurnOff;
+    [SerializeField] GameObject objectToTurnOn;
 
-    bool hasActivated = false;
+    [Header("State")]
+    [SerializeField] bool isOn = false;
+
+    bool canInteract = true;
+
+    void Start()
+    {
+        ApplyState();
+    }
+
+    void ApplyState()
+    {
+        if (leverOffObject)
+            leverOffObject.SetActive(!isOn);
+
+        if (leverOnObject)
+            leverOnObject.SetActive(isOn);
+
+        if (objectToTurnOff)
+            objectToTurnOff.SetActive(!isOn);
+
+        if (objectToTurnOn)
+            objectToTurnOn.SetActive(isOn);
+    }
+
+    void Toggle()
+    {
+        isOn = !isOn;
+        ApplyState();
+    }
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("PlayerInteract") && !hasActivated)
+        // El collider de interacción del Player
+        if (!canInteract) return;
+
+        if (other.CompareTag("PlayerInteract"))
         {
-            hasActivated = true;
-            Debug.Log("Trigger detectado por: " + other.name);
-            Switch();
+            Toggle();
+            canInteract = false;
+            Invoke(nameof(ResetInteract), 0.3f); // evita spam
         }
     }
 
-    void Switch()
+    void ResetInteract()
     {
-        Debug.Log("Intentando apagar ON y encender OFF");
-
-        if (objectOn != null)
-        {
-            Debug.Log("Apagando: " + objectOn.name);
-            objectOn.SetActive(false);
-        }
-        else
-        {
-            Debug.LogError("objectOn NO está asignado");
-        }
-
-        if (objectOff != null)
-        {
-            Debug.Log("Encendiendo: " + objectOff.name);
-            objectOff.SetActive(true);
-        }
-        else
-        {
-            Debug.LogError("objectOff NO está asignado");
-        }
-
-        if (extraObject != null)
-        {
-            Debug.Log("Apagando extra: " + extraObject.name);
-            extraObject.SetActive(false);
-        }
+        canInteract = true;
     }
 }

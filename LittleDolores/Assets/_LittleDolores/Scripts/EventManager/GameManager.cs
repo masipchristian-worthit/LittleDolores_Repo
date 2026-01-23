@@ -18,33 +18,26 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // ===== ESTADÍSTICAS DEL JUGADOR (FUENTE DE LA VERDAD) =====
+    // ===== ESTADÍSTICAS DEL JUGADOR =====
     [Header("Player Stats")]
-    public int playerHealth = 10;
-    
-    // Estas son las variables que usan los Powerups y el Player
-    public int playerDamage = 1;            // Daño total
-    public float currentMoveSpeed = 10f;    // Velocidad actual
-    public float currentJumpForce = 15f;    // Fuerza de salto actual
-    public bool hasDashAbility = false;     // ¿Tiene Dash?
+    public int maxHealth = 10;        // Vida máxima del jugador
+    public int playerHealth = 10;     // Vida actual del jugador
 
-    public Transform playerTransform;       
+    public int playerDamage = 1;       // Daño total
+    public float currentMoveSpeed = 10f;
+    public float currentJumpForce = 15f;
+    public bool hasDashAbility = false;
+
+    public Transform playerTransform;
     public int playerPoints;
-    
-    // ===== CONFIGURACIÓN DEL BOSS =====
-    [Header("Boss Config")]
-    public string bossSceneName = "SCN_Boss";
-    public int bossMaxHealth = 20;           
-    public int bossCurrentHealth;              
-    public bool isBossActive = false;
-    public Transform bossTransform;
 
-    // ===== GLOBAL AI & ESCENA =====
-    [Header("Global AI State")]
-    public bool enemiesAreUnhappy = false;  
-    public int maxDefenders = 3;            
-    public int currentDefenders = 0;        
+    // ===== GLOBAL AI & ENEMIGOS =====
+    [Header("Enemies & AI")]
+    public bool enemiesAreUnhappy = false;
+    public int maxDefenders = 3;
+    public int currentDefenders = 0;
     private HashSet<Transform> occupiedWeakSpots = new HashSet<Transform>();
+    private List<GShroomEnemy> activeEnemies = new List<GShroomEnemy>();
 
     // ===== TIMER DE ESCENAS =====
     [Header("Scene Timer")]
@@ -52,12 +45,10 @@ public class GameManager : MonoBehaviour
     private bool isTimerActive = false;
     public float timeRemaining;
     private bool firstKillTriggered = false;
-    
+
     // Paneles UI
     [SerializeField] GameObject gameOverPanel;
     [SerializeField] GameObject victoryPanel;
-
-    private List<GShroomEnemy> activeEnemies = new List<GShroomEnemy>();
 
     private void Awake()
     {
@@ -71,57 +62,43 @@ public class GameManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        
+
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Reseteo de estados de nivel al cargar escena
+        // Reset de estados al cargar la escena
         enemiesAreUnhappy = false;
         firstKillTriggered = false;
         isTimerActive = false;
         currentDefenders = 0;
         occupiedWeakSpots.Clear();
         activeEnemies.Clear();
-        
-        isBossActive = false;
-        bossCurrentHealth = bossMaxHealth;
-        bossTransform = null;
 
         if (playerTransform == null)
         {
-             GameObject p = GameObject.FindGameObjectWithTag("Player");
-             if(p != null)
-             {
-                 playerTransform = p.transform;
-             }
+            GameObject p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null)
+                playerTransform = p.transform;
         }
 
         Time.timeScale = 1f;
-        
-        if(gameOverPanel) 
-        {
-            gameOverPanel.SetActive(false);
-        }
-        if(victoryPanel) 
-        {
-            victoryPanel.SetActive(false);
-        }
+
+        if (gameOverPanel) gameOverPanel.SetActive(false);
+        if (victoryPanel) victoryPanel.SetActive(false);
     }
 
     private void Update()
     {
-        if (playerHealth < 0) 
-        {
-            playerHealth = 0;
-        }
-        
-        // Timer de Escena
+        // Limitar la vida del jugador entre 0 y maxHealth
+        playerHealth = Mathf.Clamp(playerHealth, 0, maxHealth);
+
+        // Timer de escena
         if (isTimerActive)
         {
             timeRemaining -= Time.deltaTime;
-            if (timeRemaining <= 0) 
+            if (timeRemaining <= 0)
             {
                 TriggerGameOver();
             }
@@ -129,98 +106,55 @@ public class GameManager : MonoBehaviour
     }
 
     // =========================================================
-    // MÉTODOS PARA LOS POWERUPS (Se llaman desde los Powerups)
+    // MÉTODOS PARA POWERUPS / MEJORAS
     // =========================================================
-    public void UpgradeJump(float amount) 
-    { 
-        currentJumpForce += amount; 
-    }
-    
-    public void UpgradeSpeed(float amount) 
-    { 
-        currentMoveSpeed += amount; 
-    }
-    
-    public void UpgradeDamage(int amount) 
-    { 
-        playerDamage += amount; 
-    }
-    
-    public void UnlockDash() 
-    { 
-        hasDashAbility = true; 
-    }
+    public void UpgradeJump(float amount) { currentJumpForce += amount; }
+    public void UpgradeSpeed(float amount) { currentMoveSpeed += amount; }
+    public void UpgradeDamage(int amount) { playerDamage += amount; }
+    public void UnlockDash() { hasDashAbility = true; }
 
     // --- GESTIÓN DE VIDA DEL PLAYER ---
     public void TakeDamage(int damage)
     {
         playerHealth -= damage;
-        if (playerHealth <= 0) 
+        if (playerHealth <= 0)
         {
             TriggerGameOver();
         }
     }
 
-    // --- GESTIÓN BOSS ---
-    public void RegisterBoss(Transform boss)
+    public void HealPlayer(int amount)
     {
-        bossTransform = boss;
-        bossCurrentHealth = bossMaxHealth;
-        isBossActive = true;
-    }
-
-    public void DamageBoss(int damage)
-    {
-        bossCurrentHealth -= damage;
-        if (bossCurrentHealth <= 0) 
-        {
-            BossDefeated();
-        }
-    }
-
-    void BossDefeated()
-    {
-        bossCurrentHealth = 0;
-        isBossActive = false;
-        if (victoryPanel) 
-        {
-            victoryPanel.SetActive(true);
-        }
+        playerHealth += amount;
+        if (playerHealth > maxHealth)
+            playerHealth = maxHealth;
     }
 
     // --- GESTIÓN ENEMIGOS ---
-    public void RegisterEnemy(GShroomEnemy enemy) 
-    { 
-        if(!activeEnemies.Contains(enemy)) 
-        {
-            activeEnemies.Add(enemy); 
-        }
+    public void RegisterEnemy(GShroomEnemy enemy)
+    {
+        if (!activeEnemies.Contains(enemy))
+            activeEnemies.Add(enemy);
     }
-    
-    public void UnregisterEnemy(GShroomEnemy enemy) 
-    { 
-        if(activeEnemies.Contains(enemy)) 
-        {
+
+    public void UnregisterEnemy(GShroomEnemy enemy)
+    {
+        if (activeEnemies.Contains(enemy))
             activeEnemies.Remove(enemy);
-        }
-        
+
         if (activeEnemies.Count == 0 && isTimerActive)
         {
             isTimerActive = false;
-            if (victoryPanel) 
-            {
+            if (victoryPanel)
                 victoryPanel.SetActive(true);
-            }
         }
     }
 
     public void NotifyEnemyDeath()
     {
-        if (!enemiesAreUnhappy) 
-        {
+        if (!enemiesAreUnhappy)
             enemiesAreUnhappy = true;
-        }
-        
+
         string sceneName = SceneManager.GetActiveScene().name;
         if ((sceneName == "SCN_Aldea1" || sceneName == "SCN_Aldea2") && !firstKillTriggered)
         {
@@ -230,14 +164,12 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // --- GAME OVER / REINTENTO ---
     void TriggerGameOver()
     {
         isTimerActive = false;
         Time.timeScale = 0f;
-        if (gameOverPanel) 
-        {
-            gameOverPanel.SetActive(true);
-        }
+        if (gameOverPanel) gameOverPanel.SetActive(true);
     }
 
     public void RetryScene()
@@ -246,37 +178,33 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
-    // --- IA UTILS ---
-    public bool TryClaimWeakSpot(Transform spot) 
-    { 
-        if (occupiedWeakSpots.Contains(spot)) return false; 
-        occupiedWeakSpots.Add(spot); 
-        return true; 
+    // --- UTILIDADES IA / DEFENSA ---
+    public bool TryClaimWeakSpot(Transform spot)
+    {
+        if (occupiedWeakSpots.Contains(spot)) return false;
+        occupiedWeakSpots.Add(spot);
+        return true;
     }
-    
-    public void ReleaseWeakSpot(Transform spot) 
-    { 
-        if (spot != null && occupiedWeakSpots.Contains(spot)) 
+
+    public void ReleaseWeakSpot(Transform spot)
+    {
+        if (spot != null && occupiedWeakSpots.Contains(spot))
+            occupiedWeakSpots.Remove(spot);
+    }
+
+    public bool TryJoinDefense()
+    {
+        if (currentDefenders < maxDefenders)
         {
-            occupiedWeakSpots.Remove(spot); 
+            currentDefenders++;
+            return true;
         }
+        return false;
     }
-    
-    public bool TryJoinDefense() 
-    { 
-        if (currentDefenders < maxDefenders) 
-        { 
-            currentDefenders++; 
-            return true; 
-        } 
-        return false; 
-    }
-    
-    public void LeaveDefense() 
-    { 
-        if (currentDefenders > 0) 
-        {
-            currentDefenders--; 
-        }
+
+    public void LeaveDefense()
+    {
+        if (currentDefenders > 0)
+            currentDefenders--;
     }
 }
