@@ -69,6 +69,11 @@ public class PlayerController2D : MonoBehaviour
     [Header("Attack Buffer")]
     [SerializeField] float attackBufferTime = 0.2f;
 
+     [Header("AnimationBools")]
+    bool isJumping => playerRb.linearVelocity.y > 0.1f && !isGrounded;
+    bool isFalling => playerRb.linearVelocity.y < -0.1f && !isGrounded && !isJumping;
+    bool isMoving => Mathf.Abs(playerRb.linearVelocity.x) > 0.1f;
+
     public bool IsAttacking => isAttacking;
 
     private void Awake()
@@ -139,13 +144,19 @@ public class PlayerController2D : MonoBehaviour
     {
         if (anim == null) return;
 
-        // Run animation only when moving and not attacking/dashing
-        bool isRunning = moveInput.x != 0 && !isAttacking && !isDashing;
-        anim.SetBool("Run", isRunning);
+        if(isGrounded) anim.SetBool("Grounded", true);
+        else anim.SetBool("Grounded", false);
 
-        anim.SetBool("Grounded", isGrounded);
-    }
+        if (isMoving) anim.SetBool("Run", true);
+        else anim.SetBool("Run", false);
 
+        if (isJumping) anim.SetBool("Jump", true);
+        else anim.SetBool("Jump", false);
+
+        if (isFalling) anim.SetBool("Fall", true);
+        else anim.SetBool("Fall", false);
+}
+    
     void Jump()
     {
         float currentJumpForce = 15f;
@@ -195,6 +206,7 @@ public class PlayerController2D : MonoBehaviour
             isGrounded = groundCheckCollider.IsTouchingLayers(groundLayer);
         }
     }
+
 
     public void OnMove(InputAction.CallbackContext context)
     {
