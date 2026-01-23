@@ -134,14 +134,18 @@ public class E_Shroom : MonoBehaviour
         anim.SetBool("Run", moving);
     }
 
+    // === MODIFICACIÓN: Desactivado para evitar doble daño ===
+    // La lógica de daño ahora reside en PlayerAttackHitbox.cs
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (isDead) return;
 
+        /* LOGICA MOVIDA AL HITBOX DEL JUGADOR
         if (other.CompareTag("PlayerAttack"))
         {
             TakeDamage(1);
         }
+        */
     }
 
     public void TakeDamage(int dmg)
@@ -149,11 +153,16 @@ public class E_Shroom : MonoBehaviour
         if (isDead) return;
 
         health -= dmg;
-        anim.SetTrigger("Hit");
-
-        // Comprobación opcional extra (en caso de que TakeDamage haga morir)
-        if (health <= 0)
+        
+        // Si sigue vivo, Hit, si no, morirá en el Update o aquí mismo.
+        if (health > 0)
+        {
+            anim.SetTrigger("Hit");
+        }
+        else
+        {
             Die();
+        }
     }
 
     void Die()
