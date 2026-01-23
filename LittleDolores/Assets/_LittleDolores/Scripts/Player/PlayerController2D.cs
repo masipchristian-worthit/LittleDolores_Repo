@@ -255,18 +255,15 @@ public class PlayerController2D : MonoBehaviour
         
         if(anim != null) anim.SetTrigger("Attack");
 
-        // STOP MOVEMENT COMPLETELY
-        playerRb.linearVelocity = new Vector2(0, playerRb.linearVelocity.y);
-        // ENCENDER HITBOX
+         /*
         if (attackHitbox != null) attackHitbox.enabled = true;
 
-        yield return new WaitForSeconds(0.1f); 
-        
-        // === COMENTA ESTO PARA LA PRUEBA ===
-        // if (attackHitbox != null) attackHitbox.enabled = false; 
-        // ===================================
-
         yield return new WaitForSeconds(0.2f); 
+        
+        if (attackHitbox != null) attackHitbox.enabled = false;
+        */
+        yield return new WaitForSeconds(0.3f); 
+        
         isAttacking = false; 
         canAttack = true;
     }
