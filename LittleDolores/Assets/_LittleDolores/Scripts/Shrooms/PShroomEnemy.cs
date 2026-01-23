@@ -1,29 +1,30 @@
 using System.Collections;
 using UnityEngine;
 
-public class GShroomEnemy : MonoBehaviour
+public class PShroomEnemy : MonoBehaviour
 {
-    [Header("ESTADÍSTICAS")]
-    [SerializeField] public int health = 2; 
-    [SerializeField] int damageToPlayer = 1;
+    [Header("ESTADÍSTICAS (HÍBRIDO)")]
+    [SerializeField] public int health = 4; // El más resistente
+    [SerializeField] int damageToPlayer = 2; 
 
-    [Header("COMPORTAMIENTO DE MOVIMIENTO")]
-    [SerializeField] float walkSpeed = 2.5f;
-    [SerializeField] float runSpeed = 4.5f;
-    [SerializeField] float jumpForce = 8.5f;
+    [Header("MOVIMIENTO")]
+    [SerializeField] float walkSpeed = 3.0f; 
+    [SerializeField] float runSpeed = 5.0f;
+    [SerializeField] float jumpForce = 9.0f;
     [SerializeField] float maxJumpHeight = 4.0f;
     [SerializeField] float platformSearchRadius = 10f;
 
-    [Header("IA DE COMBATE (BAITING)")]
-    [SerializeField] float baitDistance = 3.5f;
-    [SerializeField] float aggroInterval = 3.0f;
+    [Header("IA DE COMBATE")]
+    [SerializeField] float baitDistance = 3.0f; 
+    [SerializeField] float aggroInterval = 2.0f; // Balanceado entre Verde y Rojo
 
-    [Header("PROBABILIDADES")]
-    [Range(0, 100)] public int flankChance = 30;
+    [Header("PROBABILIDADES DE ATAQUE")]
+    [Range(0, 100)] public int flankChance = 40; 
+    [Range(0, 100)] public int gasAttackChance = 50; // 50% Gas, 50% Pinchos
 
     [Header("SENSORES")]
-    [SerializeField] float detectionRange = 8f;
-    [SerializeField] float attackRange = 1.2f;
+    [SerializeField] float detectionRange = 10f;
+    [SerializeField] float attackRange = 1.5f;
     [SerializeField] Transform wallCheck;
     [SerializeField] Transform edgeCheck;
     [SerializeField] LayerMask groundLayer;
@@ -35,7 +36,7 @@ public class GShroomEnemy : MonoBehaviour
     public int sfxHitIdx = -1;
     public int sfxDeathIdx = -1;
 
-    // REFERENCIAS INTERNAS
+    // REFERENCIAS
     Rigidbody2D rb;
     Animator anim;
     Collider2D myCollider;
@@ -61,11 +62,10 @@ public class GShroomEnemy : MonoBehaviour
     bool isLanding = false;
     bool isJumping => rb.linearVelocity.y > 0.1f && !isGrounded;
     bool isFalling => rb.linearVelocity.y < -0.1f && !isGrounded && !isJumping;
-    bool isMoving => rb.linearVelocity.x != 0;
+    bool isMoving => Mathf.Abs(rb.linearVelocity.x) > 0.1f;
 
     float nextDecisionTime;
     float stuckCheckTimer;
-
 
     [Header("TIMERS (DEBUG)")]
     public float jumpCooldown = 0f;
@@ -86,9 +86,7 @@ public class GShroomEnemy : MonoBehaviour
         myCollider = GetComponent<Collider2D>();
 
         if (anim != null)
-        {
             anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
-        }
     }
 
     void Start()
@@ -97,47 +95,32 @@ public class GShroomEnemy : MonoBehaviour
         runSpeed += Random.Range(-0.5f, 0.5f);
 
         GameObject homeObj = GameObject.Find("protectHome");
-        if (homeObj != null)
-        {
-            homePoint = homeObj.transform;
-        }
+        if (homeObj != null) homePoint = homeObj.transform;
 
         if (GameManager.Instance != null)
         {
             isUnhappy = GameManager.Instance.enemiesAreUnhappy;
-            GameManager.Instance.RegisterEnemy(this);
-
+            
             if (GameManager.Instance.playerTransform != null)
-            {
                 playerScript = GameManager.Instance.playerTransform.GetComponent<PlayerController2D>();
-            }
         }
 
         rb.sleepMode = RigidbodySleepMode2D.NeverSleep;
-        
-        if (Random.value > 0.5f)
-        {
-            Flip();
-        }
+        if (Random.value > 0.5f) Flip();
     }
 
     void OnDestroy()
     {
-        if (GameManager.Instance != null)
-        {
-            GameManager.Instance.UnregisterEnemy(this);
-        }
+        // Limpieza si es necesaria
     }
 
     void Update()
     {
         if (isDead) return;
 
-        // Store previous ground state BEFORE checking
         wasGroundedLastFrame = isGrounded;
         CheckGround();
         
-        // Detect landing
         if (!wasGroundedLastFrame && isGrounded && !isLanding && !isDead && !isBeingHit)
         {
             StartCoroutine(LandingRoutine());
@@ -148,7 +131,6 @@ public class GShroomEnemy : MonoBehaviour
         if (jumpCooldown > 0) jumpCooldown -= Time.deltaTime;
         if (evasionCooldown > 0) evasionCooldown -= Time.deltaTime;
 
-        // Can't think while busy
         bool canThink = !isWaitingAtEdge && !isBeingHit && !isLanding && currentState != State.Attack && currentState != State.AmbushFall;
         
         if (Time.time >= nextDecisionTime && canThink)
@@ -159,61 +141,30 @@ public class GShroomEnemy : MonoBehaviour
 
         AnimationManager();
         
-        if (!isBeingHit && !isLanding)
-        {
-            CheckIfStuck();
-        }
+        if (!isBeingHit && !isLanding) CheckIfStuck();
     }
 
     void FixedUpdate()
     {
         if (isDead || isBeingHit || isLanding) return;
-        
         ExecuteMovement();
     }
 
     // ====================================================
-    // GESTOR DE ANIMACIONES - COMPLETELY REBUILT
+    // ANIMACIONES
     // ====================================================
     void AnimationManager()
     {
         if (anim == null) return;
 
-        // Always update Unhappy
         anim.SetBool("Unhappy", isUnhappy);
-        
-        // Don't update if dead, being hit, or landing
         if (isDead || isBeingHit || isLanding) return;
 
-        // 1. GROUNDED - Always accurate
-        if (isGrounded) anim.SetBool("Grounded", true);
-        else anim.SetBool("Grounded", false);
+        anim.SetBool("Grounded", isGrounded);
+        anim.SetBool("Moving", isMoving);
+        anim.SetBool("Jump", isJumping);
+        anim.SetBool("Falling", isFalling);
 
-        // 2. MOVING - Horizontal movement
-        if (isMoving)
-        {
-            anim.SetBool("Moving", true);
-        }
-        else
-        {
-            anim.SetBool("Moving", false);
-        }
-
-        // 3. JUMP - Going up and not grounded
-        if (isJumping) 
-        {
-            anim.SetBool("Jump", true);
-        }
-        else 
-        {
-            anim.SetBool("Jump", false);
-
-        }
-
-        if (rb.linearVelocity.y < -0.1f && !isGrounded && !isJumping) anim.SetBool("Falling", true);
-        else anim.SetBool("Falling", false);
-
-        // Debug values
         debugMoving = isMoving;
         debugGrounded = isGrounded;
         debugJumping = isJumping;
@@ -221,53 +172,42 @@ public class GShroomEnemy : MonoBehaviour
         debugLanding = isLanding;
     }
 
-    // ====================================================
-    // LANDING ROUTINE - NEW
-    // ====================================================
     IEnumerator LandingRoutine()
     {
         isLanding = true;
-        
-        // Stop horizontal movement during landing
         rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-        
-        // Set all bools for landing state
         anim.SetTrigger("Landing");
-        
-        // Wait for landing animation (adjust to your animation length)
         yield return new WaitForSeconds(0.3f);
-        
         isLanding = false;
-        
-        // Can jump again after landing
         jumpCooldown = 0f;
     }
 
     // ====================================================
-    // COLLISION HANDLING
+    // COLISIONES & ATAQUE HÍBRIDO
     // ====================================================
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (isDead) return;
 
-        // Ground detection
         if (groundLayer == (groundLayer | (1 << collision.gameObject.layer)))
         {
             isGrounded = true;
             if (currentState == State.AmbushFall)
             {
-                StartCoroutine(GasAttackRoutine());
+                // Al caer de emboscada, elige ataque aleatorio
+                PerformRandomAttack();
             }
         }
 
-        // Other mushroom
-        if (collision.gameObject.GetComponent<GShroomEnemy>() != null)
+        // Evitar superposición con cualquier tipo de seta
+        if (collision.gameObject.GetComponent<GShroomEnemy>() != null || 
+            collision.gameObject.GetComponent<RShroomEnemy>() != null ||
+            collision.gameObject.GetComponent<PShroomEnemy>() != null)
         {
             Flip();
             return;
         }
 
-        // Player collision
         if (collision.gameObject.CompareTag("Player"))
         {
             bool playerStompsEnemy = false;
@@ -299,7 +239,8 @@ public class GShroomEnemy : MonoBehaviour
                 if (GameManager.Instance != null)
                     GameManager.Instance.TakeDamage(damageToPlayer);
                 
-                StartCoroutine(GasAttackRoutine());
+                // Contraataque aleatorio al tocar
+                PerformRandomAttack();
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, 5f);
             }
             else
@@ -311,8 +252,21 @@ public class GShroomEnemy : MonoBehaviour
         }
     }
 
+    // Método helper para decidir qué ataque lanzar
+    void PerformRandomAttack()
+    {
+        if (Random.Range(0, 100) < gasAttackChance)
+        {
+            StartCoroutine(GasAttackRoutine());
+        }
+        else
+        {
+            StartCoroutine(SpikesAttackRoutine());
+        }
+    }
+
     // ====================================================
-    // MOVEMENT LOGIC
+    // MOVIMIENTO COMPLETO
     // ====================================================
     void ExecuteMovement()
     {
@@ -339,14 +293,9 @@ public class GShroomEnemy : MonoBehaviour
             case State.Patrol:
                 HandlePatrolMovement();
                 break;
-
             case State.Chase:
-                if (GameManager.Instance.playerTransform != null)
-                {
-                    BaitAndChaseLogic();
-                }
+                if (GameManager.Instance.playerTransform != null) BaitAndChaseLogic();
                 break;
-
             case State.Flee:
                 if (GameManager.Instance.playerTransform != null)
                 {
@@ -354,7 +303,6 @@ public class GShroomEnemy : MonoBehaviour
                     MoveSmartTarget(transform.position + Vector3.right * dir * 5f, runSpeed * 1.2f, true);
                 }
                 break;
-
             case State.Flank:
                 if (currentWeakSpot != null)
                 {
@@ -380,12 +328,8 @@ public class GShroomEnemy : MonoBehaviour
                     }
                 }
                 break;
-
             case State.Defend:
-                if (homePoint != null)
-                {
-                    MoveSmartTarget(homePoint.position, runSpeed, true);
-                }
+                if (homePoint != null) MoveSmartTarget(homePoint.position, runSpeed, true);
                 break;
         }
     }
@@ -393,23 +337,17 @@ public class GShroomEnemy : MonoBehaviour
     void BaitAndChaseLogic()
     {
         if (GameManager.Instance.playerTransform == null) return;
-
         Vector2 playerPos = GameManager.Instance.playerTransform.position;
         float dist = Vector2.Distance(transform.position, playerPos);
-
         aggroTimer += Time.deltaTime;
 
-        bool playerIsAttacking = false;
-        if (playerScript != null)
-        {
-            playerIsAttacking = playerScript.IsAttacking;
-        }
+        bool playerIsAttacking = (playerScript != null && playerScript.IsAttacking);
 
         if (!isAggressive)
         {
             bool timeOut = aggroTimer > aggroInterval;
             bool tooClose = dist < attackRange;
-            bool tacticalOpportunity = !playerIsAttacking && dist < baitDistance && aggroTimer > 1f;
+            bool tacticalOpportunity = !playerIsAttacking && dist < baitDistance; 
 
             if (timeOut || tooClose || tacticalOpportunity)
             {
@@ -419,23 +357,11 @@ public class GShroomEnemy : MonoBehaviour
 
         if (isAggressive)
         {
-            if (isGrounded && dist < 2.5f && evasionCooldown <= 0)
-            {
-                if (Random.Range(0, 3) == 0)
-                {
-                    float dirToPlayer = Mathf.Sign(playerPos.x - transform.position.x);
-                    rb.linearVelocity = new Vector2(-dirToPlayer * runSpeed, jumpForce * 0.8f);
-                    CheckFlip(-dirToPlayer);
-                    evasionCooldown = 2.0f;
-                    return;
-                }
-            }
-
             MoveSmartTarget(playerPos, runSpeed * 1.2f, false);
 
             if (dist <= attackRange)
             {
-                StartCoroutine(GasAttackRoutine());
+                PerformRandomAttack(); // Decide aleatoriamente
                 isAggressive = false;
                 aggroTimer = 0f;
             }
@@ -443,20 +369,15 @@ public class GShroomEnemy : MonoBehaviour
         else
         {
             float dir = Mathf.Sign(playerPos.x - transform.position.x);
-
             if (dist > baitDistance + 1f)
             {
-                MoveSmartTarget(playerPos, runSpeed * 0.7f, false);
+                MoveSmartTarget(playerPos, runSpeed * 0.8f, false);
             }
             else if (dist < baitDistance - 1f)
             {
                 rb.linearVelocity = new Vector2(-dir * runSpeed, rb.linearVelocity.y);
                 CheckFlip(-dir);
-
-                if (Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer))
-                {
-                    isAggressive = true;
-                }
+                if (Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer)) isAggressive = true;
             }
             else
             {
@@ -477,86 +398,43 @@ public class GShroomEnemy : MonoBehaviour
             rb.linearVelocity = new Vector2(dir * speed, rb.linearVelocity.y);
             CheckFlip(dir);
         }
-        else
+        else if (Mathf.Abs(yDist) < 1.0f) 
         {
-            if (Mathf.Abs(yDist) < 1.0f)
-            {
-                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-            }
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
         }
 
-        Collider2D wallHit = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
-        bool wallAhead = false;
-        
-        if (wallHit != null)
-        {
-             if (!wallHit.CompareTag("Player") && wallHit.gameObject != gameObject)
-             {
-                 wallAhead = true;
-             }
-        }
-
+        bool wallAhead = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
         bool ledgeAhead = !Physics2D.OverlapCircle(edgeCheck.position, edgeCheckRadius, groundLayer);
 
         if (isGrounded && jumpCooldown <= 0 && !isLanding)
         {
-            if (wallAhead)
-            {
-                Jump();
-            }
-            else if (yDist > 1.0f)
-            {
-                bool isAlignedUnderTarget = Mathf.Abs(xDist) < 0.8f;
-                
-                if (ledgeAhead || wallAhead || isAlignedUnderTarget)
-                {
-                    Jump();
-                }
-            }
-            else if (yDist < -1.5f && Mathf.Abs(xDist) < 1.5f)
-            {
-                StartCoroutine(DisableCollisionRoutine());
-            }
+            if (wallAhead) Jump();
+            else if (yDist > 1.0f && (ledgeAhead || wallAhead || Mathf.Abs(xDist) < 0.8f)) Jump();
+            else if (yDist < -1.5f && Mathf.Abs(xDist) < 1.5f) StartCoroutine(DisableCollisionRoutine());
 
-            if (ledgeAhead && !ignoreLedges && yDist < 0.5f)
-            {
-                rb.linearVelocity = Vector2.zero;
-            }
+            if (ledgeAhead && !ignoreLedges && yDist < 0.5f) rb.linearVelocity = Vector2.zero;
         }
     }
 
     void HandlePatrolMovement()
     {
-        Collider2D wallHit = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
+        bool wallHit = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0, groundLayer);
         bool floorHit = Physics2D.OverlapCircle(edgeCheck.position, edgeCheckRadius, groundLayer);
         
-        bool hitRealWall = false;
-        if (wallHit != null)
+        if (wallHit || !floorHit)
         {
-            if (!wallHit.CompareTag("Player") && wallHit.gameObject != gameObject)
-            {
-                hitRealWall = true;
-            }
-        }
-
-        if (hitRealWall || !floorHit)
-        {
-            if (!isWaitingAtEdge)
-            {
-                StartCoroutine(WaitAndTurnRoutine());
-            }
+            if (!isWaitingAtEdge) StartCoroutine(WaitAndTurnRoutine());
         }
         else
         {
-            float direction = isFacingRight ? 1 : -1;
-            rb.linearVelocity = new Vector2(direction * walkSpeed, rb.linearVelocity.y);
+            float dir = isFacingRight ? 1 : -1;
+            rb.linearVelocity = new Vector2(dir * walkSpeed, rb.linearVelocity.y);
         }
     }
 
     void CheckIfStuck()
     {
         bool shouldBeMoving = currentState == State.Patrol || currentState == State.Chase;
-        
         if (shouldBeMoving && !isWaitingAtEdge && !isAggressive)
         {
             if (Mathf.Abs(rb.linearVelocity.x) < 0.1f && isGrounded)
@@ -564,86 +442,63 @@ public class GShroomEnemy : MonoBehaviour
                 stuckCheckTimer += Time.deltaTime;
                 if (stuckCheckTimer > 0.5f)
                 {
-                    if (Random.value > 0.5f && !isLanding) Jump(); 
-                    else Flip();
+                    if (Random.value > 0.5f && !isLanding) Jump(); else Flip();
                     stuckCheckTimer = 0f;
                 }
             }
-            else
-            {
-                stuckCheckTimer = 0f;
-            }
+            else stuckCheckTimer = 0f;
         }
     }
 
-
     // ====================================================
-    // DAMAGE & DEATH - FIXED
+    // DAÑO Y MUERTE
     // ====================================================
     public void TakeDamage(int damage)
     {
         if (isDead || isBeingHit) return;
 
         health -= damage;
-        
+
         if (health <= 0)
         {
             Die();
         }
         else
         {
-            // Esto es lo que pedías: dispara el trigger Hit
-            StartCoroutine(HitRoutine()); 
+            StartCoroutine(HitRoutine());
         }
     }
 
-IEnumerator HitRoutine()
+    IEnumerator HitRoutine()
     {
         isBeingHit = true;
         isLanding = false;
         
-        // 1. DETENCIÓN FÍSICA TOTAL
         rb.linearVelocity = Vector2.zero;
         
-        // 2. Apagar parámetros
         anim.SetBool("Moving", false); 
         anim.SetBool("Jump", false);
         anim.SetBool("Falling", false);
-        anim.SetBool("Grounded", true); 
+        anim.SetBool("Grounded", true);
 
-        // 3. Disparar animación
         anim.SetTrigger("Hit");
-        
-        // === CORRECCIÓN AQUÍ ===
-        // Usamos la variable sfxHitIdx en lugar de -1 y comprobamos null
-        if (AudioManager.Instance != null) 
-        {
-            AudioManager.Instance.PlaySFX(sfxHitIdx);
-        }
-        // =======================
+        if(AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxHitIdx);
 
         yield return new WaitForSeconds(0.2f); 
 
-        // 4. IMPORTANTE: Esto ahora sí se ejecutará
         isBeingHit = false;
     }
 
     void Die()
     {
         if (isDead) return;
-
         isDead = true;
-        isBeingHit = false;
-        isLanding = false;
         
-        // Reset ALL animation bools
         anim.SetBool("Moving", false);
         anim.SetBool("Jump", false);
         anim.SetBool("Falling", false);
         anim.SetBool("Grounded", true);
         anim.SetBool("Unhappy", false);
-        
-        // Trigger death
         anim.SetTrigger("Death");
 
         rb.linearVelocity = Vector2.zero;
@@ -651,24 +506,50 @@ IEnumerator HitRoutine()
         myCollider.enabled = false;
 
         ReleaseCurrentSpot();
-        
         if (GameManager.Instance != null) GameManager.Instance.NotifyEnemyDeath();
-        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxDeathIdx);
+        if(AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxDeathIdx);
 
         Destroy(gameObject, 2f);
     }
 
+    // ====================================================
+    // ATAQUES (GAS y SPIKES)
+    // ====================================================
+    
+    // ATAQUE 1: GAS (De la Verde)
     IEnumerator GasAttackRoutine()
     {
         currentState = State.Attack;
         rb.linearVelocity = Vector2.zero;
         
         anim.SetBool("Moving", false);
-        anim.SetTrigger("Gas");
+        anim.SetTrigger("Gas"); // Trigger Gas
         
         if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxAttackIdx);
 
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1.0f); // Duración gas
+
+        if (!isDead)
+        {
+            ReleaseCurrentSpot();
+            ChangeState(State.Chase);
+            isAggressive = false;
+            aggroTimer = 0f;
+        }
+    }
+
+    // ATAQUE 2: SPIKES (De la Roja)
+    IEnumerator SpikesAttackRoutine()
+    {
+        currentState = State.Attack;
+        rb.linearVelocity = Vector2.zero;
+        
+        anim.SetBool("Moving", false);
+        anim.SetTrigger("Spikes"); // Trigger Spikes
+        
+        if (AudioManager.Instance != null) AudioManager.Instance.PlaySFX(sfxAttackIdx);
+
+        yield return new WaitForSeconds(0.8f); // Duración pinchos
 
         if (!isDead)
         {
@@ -680,7 +561,7 @@ IEnumerator HitRoutine()
     }
 
     // ====================================================
-    // UTILITY METHODS
+    // UTILS
     // ====================================================
     Collider2D FindBestPlatformStep(Vector2 finalTarget)
     {
@@ -729,7 +610,7 @@ IEnumerator HitRoutine()
     void Jump()
     {
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-        jumpCooldown = 1.0f; // Prevent jumping again until landing
+        jumpCooldown = 1.0f;
         isGrounded = false;
         isLanding = false;
     }
@@ -738,7 +619,7 @@ IEnumerator HitRoutine()
     {
         isWaitingAtEdge = true;
         rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-        yield return new WaitForSeconds(Random.Range(1.0f, 2.0f));
+        yield return new WaitForSeconds(Random.Range(0.5f, 1.0f)); 
         Flip();
         isWaitingAtEdge = false;
     }
@@ -754,137 +635,61 @@ IEnumerator HitRoutine()
         }
     }
 
-    void CheckGround()
-    {
-        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundLayer);
-    }
-
-    void CheckGlobalState()
-    {
-        if (!isUnhappy && GameManager.Instance != null)
-        {
-            if (GameManager.Instance.enemiesAreUnhappy) isUnhappy = true;
-        }
-    }
-
-    void CheckFlip(float direction)
-    {
-        if (direction > 0 && !isFacingRight) Flip();
-        else if (direction < 0 && isFacingRight) Flip();
-    }
-
-    void Flip()
-    {
-        isFacingRight = !isFacingRight;
-        Vector3 scale = transform.localScale;
-        scale.x *= -1;
-        transform.localScale = scale;
-    }
-
-    void FacePlayer()
-    {
-        if (GameManager.Instance.playerTransform != null)
-        {
-            float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x);
-            CheckFlip(dir);
-        }
+    void CheckGround() { isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 0.2f, groundLayer); }
+    void CheckGlobalState() { if (!isUnhappy && GameManager.Instance != null && GameManager.Instance.enemiesAreUnhappy) isUnhappy = true; }
+    void CheckFlip(float direction) { if (direction > 0 && !isFacingRight) Flip(); else if (direction < 0 && isFacingRight) Flip(); }
+    void Flip() { isFacingRight = !isFacingRight; Vector3 scale = transform.localScale; scale.x *= -1; transform.localScale = scale; }
+    
+    void FacePlayer() 
+    { 
+        if (GameManager.Instance.playerTransform != null) 
+        { 
+            float dir = Mathf.Sign(GameManager.Instance.playerTransform.position.x - transform.position.x); 
+            CheckFlip(dir); 
+        } 
     }
 
     Transform FindBestWeakSpot()
     {
         GameObject[] spots = GameObject.FindGameObjectsWithTag("WeakSpot");
         if (spots == null) return null;
-
         Transform best = null;
         float minDist = 50f;
-
         foreach (GameObject go in spots)
         {
             float d = Vector2.Distance(transform.position, go.transform.position);
-            if (d < minDist && go.transform.position.y >= transform.position.y - 0.5f)
-            {
-                minDist = d;
-                best = go.transform;
-            }
+            if (d < minDist && go.transform.position.y >= transform.position.y - 0.5f) { minDist = d; best = go.transform; }
         }
         return best;
     }
 
-    void ReleaseCurrentSpot()
-    {
-        if (currentWeakSpot != null)
-        {
-            if (GameManager.Instance != null) GameManager.Instance.ReleaseWeakSpot(currentWeakSpot);
-            currentWeakSpot = null;
-        }
-        isInAmbushPosition = false;
-    }
-
-    void ChangeState(State newState)
-    {
-        if (currentState == newState) return;
-        currentState = newState;
-    }
+    void ReleaseCurrentSpot() { if (currentWeakSpot != null && GameManager.Instance != null) GameManager.Instance.ReleaseWeakSpot(currentWeakSpot); currentWeakSpot = null; isInAmbushPosition = false; }
+    void ChangeState(State newState) { if (currentState != newState) currentState = newState; }
 
     void Think()
     {
         if (GameManager.Instance.playerTransform == null) return;
-
         float dist = Vector2.Distance(transform.position, GameManager.Instance.playerTransform.position);
 
-        if (isUnhappy && dist <= attackRange)
-        {
-            ChangeState(State.Attack);
-            return;
-        }
-
-        if (currentState == State.Flank && currentWeakSpot != null)
-        {
-            if (dist < 3f && !isInAmbushPosition)
-            {
-                ReleaseCurrentSpot();
-                ChangeState(State.Chase);
-            }
-            return;
-        }
+        if (isUnhappy && dist <= attackRange) { ChangeState(State.Attack); return; }
+        if (currentState == State.Flank && currentWeakSpot != null) { if (dist < 3f && !isInAmbushPosition) { ReleaseCurrentSpot(); ChangeState(State.Chase); } return; }
 
         if (isUnhappy)
         {
             if (currentState != State.Flank && Random.Range(0, 100) < flankChance)
             {
                 Transform spot = FindBestWeakSpot();
-                if (spot != null)
-                {
-                    if (GameManager.Instance.TryClaimWeakSpot(spot))
-                    {
-                        currentWeakSpot = spot;
-                        ChangeState(State.Flank);
-                        return;
-                    }
-                }
+                if (spot != null && GameManager.Instance.TryClaimWeakSpot(spot)) { currentWeakSpot = spot; ChangeState(State.Flank); return; }
             }
-            if (dist < detectionRange) ChangeState(State.Chase);
-            else ChangeState(State.Patrol);
+            ChangeState(dist < detectionRange ? State.Chase : State.Patrol);
         }
-        else
-        {
-            ChangeState(State.Patrol);
-        }
+        else ChangeState(State.Patrol);
     }
 
     private void OnDrawGizmos()
     {
-        if (wallCheck)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireCube(wallCheck.position, new Vector3(wallCheckSize.x, wallCheckSize.y, 1));
-        }
-        if (edgeCheck)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawWireSphere(edgeCheck.position, edgeCheckRadius);
-        }
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, platformSearchRadius);
+        if (wallCheck) { Gizmos.color = Color.red; Gizmos.DrawWireCube(wallCheck.position, new Vector3(wallCheckSize.x, wallCheckSize.y, 1)); }
+        if (edgeCheck) { Gizmos.color = Color.blue; Gizmos.DrawWireSphere(edgeCheck.position, edgeCheckRadius); }
+        Gizmos.color = Color.yellow; Gizmos.DrawWireSphere(transform.position, platformSearchRadius);
     }
 }

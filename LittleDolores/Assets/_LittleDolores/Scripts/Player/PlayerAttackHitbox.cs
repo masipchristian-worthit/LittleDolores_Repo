@@ -4,36 +4,24 @@ public class PlayerAttackHitbox : MonoBehaviour
 {
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // 1. Diagnóstico visual
-        Debug.Log($"[HITBOX] Contacto con: {other.gameObject.name} (Tag: {other.tag}) (Layer: {LayerMask.LayerToName(other.gameObject.layer)})");
-
-        // 2. Obtener daño
-        int damageToDeal = 1;
-        if (GameManager.Instance != null)
+        // 1. FILTRO DE SEGURIDAD: Solo atacamos a cosas marcadas como "Enemy"
+        // Si la nueva seta no tiene este Tag, el código se detiene aquí.
+        if (other.CompareTag("Enemy"))
         {
-            damageToDeal = GameManager.Instance.playerDamage;
-        }
+            // Diagnóstico: Si sale esto, la física y el tag están bien.
+            Debug.Log($"[ARMA] Golpeó a: {other.name}");
 
-        // === CORRECCIÓN IMPORTANTE ===
-        // Usamos GetComponentInParent porque a veces golpeamos el "WallCheck" 
-        // o un collider hijo del enemigo, y el script de vida está en el padre.
-        
-        // A. Intento con GShroomEnemy
-        GShroomEnemy gEnemy = other.GetComponentInParent<GShroomEnemy>();
-        if (gEnemy != null)
-        {
-            Debug.Log($"[HITBOX] -> Enemigo GShroom encontrado. Aplicando daño.");
-            gEnemy.TakeDamage(damageToDeal);
-            return; // Ya golpeamos, salimos para no golpear dos veces
-        }
+            // 2. OBTENER DAÑO
+            int damage = 1;
+            if (GameManager.Instance != null) 
+            {
+                damage = GameManager.Instance.playerDamage;
+            }
 
-        // B. Intento con E_Shroom
-        E_Shroom eEnemy = other.GetComponentInParent<E_Shroom>();
-        if (eEnemy != null)
-        {
-            Debug.Log($"[HITBOX] -> Enemigo E_Shroom encontrado. Aplicando daño.");
-            eEnemy.TakeDamage(damageToDeal);
-            return;
+            // 3. ENVIAR DAÑO UNIVERSAL
+            // Busca la función "TakeDamage" en el objeto golpeado O en sus padres.
+            // Funciona con CUALQUIER script (Verde, Rojo, Morado, Boss) automáticamente.
+            other.SendMessageUpwards("TakeDamage", damage, SendMessageOptions.DontRequireReceiver);
         }
     }
 }
