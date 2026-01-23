@@ -25,6 +25,13 @@ public class AudioManager : MonoBehaviour
     public AudioClip[] sfxLibrary;
     public AudioClip[] voicelinesLibrary;
 
+    // =========================================================
+    // ¡ESTA ES LA VARIABLE QUE TE FALTA!
+    // Sirve para que el VoiceTrigger sepa si hay alguien hablando
+    // =========================================================
+    [HideInInspector] 
+    public bool isPriorityPlaying = false; 
+    // =========================================================
 
     void Awake()
     {
@@ -59,6 +66,7 @@ public class AudioManager : MonoBehaviour
     {
         if (voicelinesToPlay < 0 || voicelinesToPlay >= voicelinesLibrary.Length) return;
 
+        // Aquí usamos PlayOneShot para que suene aunque haya otros sonidos
         voicelinesSource.PlayOneShot(voicelinesLibrary[voicelinesToPlay]);
     }
 
@@ -107,7 +115,3 @@ public class AudioManager : MonoBehaviour
         voicelinesSource.UnPause();
     }
 }
-
-
-    
-    
