@@ -1,22 +1,22 @@
 fileFormatVersion: 2
-guid: 82b2497a29b8fae438ad5a1a2bf1b801
+guid: 2504dae121aa57848b40a890347ddaea
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 4205930966825720361
-    second: dolores_idle_sheet_0
+      213: -5048118723286026262
+    second: Idle_dolores-Sheet_0
   - first:
-      213: -4344989806693253869
-    second: dolores_idle_sheet_1
+      213: -8805643388310183965
+    second: Idle_dolores-Sheet_1
   - first:
-      213: -3394029275268630270
-    second: dolores_idle_sheet_2
+      213: -6849868045594232836
+    second: Idle_dolores-Sheet_2
   - first:
-      213: 2237141036462589271
-    second: dolores_idle_sheet_3
+      213: -1962455748476833243
+    second: Idle_dolores-Sheet_3
   - first:
-      213: 5347776772967413998
-    second: dolores_idle_sheet_4
+      213: -8101679130303432777
+    second: Idle_dolores-Sheet_4
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -96,46 +96,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: iOS
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: Android
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
     buildTarget: Standalone
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WebGL
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -164,13 +125,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: dolores_idle_sheet_0
+      name: Idle_dolores-Sheet_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 64
-        height: 64
+        width: 100
+        height: 100
       alignment: 7
       pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -179,20 +140,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 92a567b2ee77e5a30800000000000000
-      internalID: 4205930966825720361
+      spriteID: ae7b98a64ca71f9b0800000000000000
+      internalID: -5048118723286026262
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: dolores_idle_sheet_1
+      name: Idle_dolores-Sheet_1
       rect:
         serializedVersion: 2
-        x: 64
+        x: 100
         y: 0
-        width: 64
-        height: 64
+        width: 100
+        height: 100
       alignment: 7
       pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -201,20 +162,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 31dfa53aace73b3c0800000000000000
-      internalID: -4344989806693253869
+      spriteID: 3ef110d1ef11cc580800000000000000
+      internalID: -8805643388310183965
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: dolores_idle_sheet_2
+      name: Idle_dolores-Sheet_2
       rect:
         serializedVersion: 2
-        x: 128
+        x: 200
         y: 0
-        width: 64
-        height: 64
+        width: 100
+        height: 100
       alignment: 7
       pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -223,20 +184,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 20936524b5cf5e0d0800000000000000
-      internalID: -3394029275268630270
+      spriteID: cf77e000e4160f0a0800000000000000
+      internalID: -6849868045594232836
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: dolores_idle_sheet_3
+      name: Idle_dolores-Sheet_3
       rect:
         serializedVersion: 2
-        x: 192
+        x: 300
         y: 0
-        width: 64
-        height: 64
+        width: 100
+        height: 100
       alignment: 7
       pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -245,20 +206,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7554dc67bebeb0f10800000000000000
-      internalID: 2237141036462589271
+      spriteID: 5227d90f4e4f3c4e0800000000000000
+      internalID: -1962455748476833243
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: dolores_idle_sheet_4
+      name: Idle_dolores-Sheet_4
       rect:
         serializedVersion: 2
-        x: 256
+        x: 400
         y: 0
-        width: 64
-        height: 64
+        width: 100
+        height: 100
       alignment: 7
       pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -267,8 +228,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: ee8beca24ae173a40800000000000000
-      internalID: 5347776772967413998
+      spriteID: 7b7711a61cd019f80800000000000000
+      internalID: -8101679130303432777
       vertices: []
       indices: 
       edges: []
@@ -277,7 +238,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 684255ca2d2f5524fb81c34c9f087297
+    spriteID: fedb2b26590275042952e1cf13bffc1d
     internalID: 0
     vertices: []
     indices: 
@@ -287,13 +248,13 @@ TextureImporter:
     spriteCustomMetadata:
       entries:
       - key: SpriteEditor.SliceSettings
-        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":1,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":100.0,"y":100.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      dolores_idle_sheet_0: 4205930966825720361
-      dolores_idle_sheet_1: -4344989806693253869
-      dolores_idle_sheet_2: -3394029275268630270
-      dolores_idle_sheet_3: 2237141036462589271
-      dolores_idle_sheet_4: 5347776772967413998
+      Idle_dolores-Sheet_0: -5048118723286026262
+      Idle_dolores-Sheet_1: -8805643388310183965
+      Idle_dolores-Sheet_2: -6849868045594232836
+      Idle_dolores-Sheet_3: -1962455748476833243
+      Idle_dolores-Sheet_4: -8101679130303432777
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
