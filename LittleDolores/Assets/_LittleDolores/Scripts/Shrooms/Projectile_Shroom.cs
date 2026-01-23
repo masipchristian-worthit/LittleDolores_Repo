@@ -2,8 +2,10 @@ using UnityEngine;
 
 public class Projectile_Shroom : MonoBehaviour
 {
+    [Header("STATS")]
     [SerializeField] float speed = 6f;
     [SerializeField] float lifeTime = 2f;
+    [SerializeField] int damage = 1;
 
     Vector2 direction;
     Rigidbody2D rb;
@@ -12,14 +14,11 @@ public class Projectile_Shroom : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         if (!rb)
-        {
             rb = gameObject.AddComponent<Rigidbody2D>();
-        }
 
         rb.isKinematic = true;
         rb.gravityScale = 0;
 
-        // Se destruye solo a los 2 segundos si no golpea al Player
         Destroy(gameObject, lifeTime);
     }
 
@@ -27,10 +26,14 @@ public class Projectile_Shroom : MonoBehaviour
     {
         direction = dir.normalized;
 
-        // Girar sprite
         Vector3 scale = transform.localScale;
         scale.x = Mathf.Abs(scale.x) * (dir.x >= 0 ? 1 : -1);
         transform.localScale = scale;
+    }
+
+    public void SetDamage(int dmg)
+    {
+        damage = dmg;
     }
 
     void Update()
@@ -40,8 +43,17 @@ public class Projectile_Shroom : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        // Ataque del Player se rompe sin daño
+        if (other.CompareTag("PlayerAttack"))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        // Player hace daño
         if (other.CompareTag("Player"))
         {
+            GameManager.Instance.TakeDamage(damage);
             Destroy(gameObject);
         }
     }

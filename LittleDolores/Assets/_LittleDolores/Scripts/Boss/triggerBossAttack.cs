@@ -1,43 +1,37 @@
 using UnityEngine;
+using System.Collections;
 
 public class triggerBossAttack : MonoBehaviour
 {
-    // Prefabs de los ataques
+    [Header("Prefabs de ataques")]
     public GameObject action1Prefab; // se mueve de derecha a izquierda
     public GameObject action2Prefab; // cae sobre el jugador
     public GameObject action3Prefab; // spawn fijo (teletransporte)
 
-    // Spawn fijo para acción 3
-    public Transform spawn3;
+    [Header("Spawn y referencias")]
+    public Transform spawn3;             // Spawn fijo para acción 3
+    public Transform playerTransform;    // Referencia al jugador
+    public Transform teleportDestino;    // Destino de teletransporte
 
-    // Referencia al jugador
-    public Transform playerTransform;
-
-    // Destino del teletransporte
-    public Transform teleportDestino;
-
-    // Velocidad de la acción 1
+    [Header("Velocidades y altura")]
     public float attack1Speed = 10f;
+    public float attack2Speed = 5f;
+    public float alturaSobreJugador = 5f;
 
-    // Variables para Attack2
-    public float alturaSobreJugador = 5f;  // altura sobre el jugador
-    public float attack2Speed = 5f;        // velocidad de caída
-
-    // Textos de UI para cada ataque
+    [Header("UI")]
     public GameObject textoAttack1;
     public GameObject textoAttack2;
     public GameObject textoAttack3;
-
-    // Tiempo que se muestra el texto
     public float tiempoTexto = 1f;
 
-    // Controla que solo se active 1 vez por entrada
+    [Header("Daño de ataques")]
+    public int dañoAttack1 = 1; // Ataque 1 y 3 comparten el mismo daño
+
     private bool inside = false;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!other.CompareTag("Player")) return;
-        if (inside) return;
+        if (!other.CompareTag("Player") || inside) return;
 
         inside = true;
 
@@ -48,7 +42,6 @@ public class triggerBossAttack : MonoBehaviour
             return;
         }
 
-        // Elegir ataque (0,1,2)
         int choice = Random.Range(0, 3);
         Debug.Log("Ocurre acción: " + choice);
 
@@ -60,19 +53,15 @@ public class triggerBossAttack : MonoBehaviour
     private void OnTriggerExit2D(Collider2D other)
     {
         if (!other.CompareTag("Player")) return;
-        inside = false; // permite activar de nuevo al volver a entrar
+        inside = false;
     }
 
     // ===================== ATAQUES =====================
 
-    // ATAQUE 1: derecha del jugador y va a la izquierda
+    // ATAQUE 1: derecha del jugador, va a la izquierda
     void Attack1()
     {
-        if (playerTransform == null)
-        {
-            Debug.LogWarning("playerTransform no asignado");
-            return;
-        }
+        if (playerTransform == null) return;
 
         MostrarTexto(textoAttack1);
 
@@ -83,15 +72,20 @@ public class triggerBossAttack : MonoBehaviour
         if (rb != null)
         {
             rb.gravityScale = 0;
-            rb.linearVelocity = Vector2.left * attack1Speed;
+            rb.linearVelocity = Vector2.left * attack1Speed; // corregido
         }
 
-        // Apagar después de 1 segundo
-        StartCoroutine(DesactivarDespues(obj, 1f));
+        // Asignar daño y tiempo de apagado
+        Attack1Damage ad = obj.GetComponent<Attack1Damage>();
+        if (ad != null)
+        {
+            ad.damage = dañoAttack1;
+            ad.autoDeactivateTime = 2f; // se apaga solo si no colisiona
+        }
     }
 
     // ATAQUE 2: cae sobre el jugador
-    public void Attack2()
+    void Attack2()
     {
         if (action2Prefab == null || playerTransform == null) return;
 
@@ -109,14 +103,13 @@ public class triggerBossAttack : MonoBehaviour
         if (rb != null)
         {
             rb.gravityScale = 0;
-            rb.linearVelocity = Vector2.down * attack2Speed;
+            rb.linearVelocity = Vector2.down * attack2Speed; // corregido
         }
 
-        // Apagar después de 1 segundo
         StartCoroutine(DesactivarDespues(obj, 1f));
     }
 
-    // ATAQUE 3: spawn fijo con delay + teletransporte
+    // ATAQUE 3: spawn fijo con delay + teletransporte, ahora también hace daño
     void Attack3()
     {
         if (spawn3 == null || action3Prefab == null) return;
@@ -125,40 +118,40 @@ public class triggerBossAttack : MonoBehaviour
         StartCoroutine(Attack3ConDelay());
     }
 
-    System.Collections.IEnumerator Attack3ConDelay()
+    IEnumerator Attack3ConDelay()
     {
-        // Espera medio segundo antes de aparecer
         yield return new WaitForSeconds(0.5f);
 
         GameObject obj = Instantiate(action3Prefab, spawn3.position, Quaternion.identity);
 
-        // Asignar destino de teletransporte al prefab
+        // Asignar destino de teletransporte
         AttackTp tp = obj.GetComponent<AttackTp>();
         if (tp != null)
-        {
             tp.destino = teleportDestino;
-        }
         else
+            Debug.LogWarning("El prefab del ataque 3 no tiene el script AttackTp");
+
+        // Asignar daño (igual que ataque 1)
+        Attack1Damage ad = obj.GetComponent<Attack1Damage>();
+        if (ad != null)
         {
-            Debug.LogWarning("El prefab del ataque 3 no tiene el script TeleportOnTrigger");
+            ad.damage = dañoAttack1;
+            ad.autoDeactivateTime = 0.5f; // dura poco, como antes
         }
 
-        // Se mantiene activo medio segundo
         yield return new WaitForSeconds(0.5f);
-
         if (obj != null)
             obj.SetActive(false);
     }
 
     // ===================== TEXTO UI =====================
-
     void MostrarTexto(GameObject texto)
     {
         if (texto == null) return;
         StartCoroutine(MostrarTextoCoroutine(texto));
     }
 
-    System.Collections.IEnumerator MostrarTextoCoroutine(GameObject texto)
+    IEnumerator MostrarTextoCoroutine(GameObject texto)
     {
         texto.SetActive(true);
         yield return new WaitForSeconds(tiempoTexto);
@@ -166,9 +159,7 @@ public class triggerBossAttack : MonoBehaviour
     }
 
     // ===================== UTILIDADES =====================
-
-    // Coroutine para apagar un objeto después de un tiempo
-    System.Collections.IEnumerator DesactivarDespues(GameObject obj, float tiempo)
+    IEnumerator DesactivarDespues(GameObject obj, float tiempo)
     {
         yield return new WaitForSeconds(tiempo);
         if (obj != null) obj.SetActive(false);

@@ -4,8 +4,11 @@ using System.Collections;
 public class E_Shroom : MonoBehaviour
 {
     [Header("STATS")]
-    [SerializeField] public int health = 2; // público para poder cambiar desde inspector
+    [SerializeField] public int health = 2;
     [SerializeField] float moveSpeed = 2.5f;
+
+    [Header("DAMAGE")]
+    [SerializeField] public int damageToPlayer = 1;
 
     [Header("ATTACK")]
     [SerializeField] float attackDistance = 8f;
@@ -47,7 +50,6 @@ public class E_Shroom : MonoBehaviour
 
     void Update()
     {
-        // Comprobación automática de vida
         if (!isDead && health <= 0)
             Die();
 
@@ -71,8 +73,6 @@ public class E_Shroom : MonoBehaviour
 
     void Patrol()
     {
-        if (isAttacking) return;
-
         float dir = isFacingRight ? 1f : -1f;
 
         bool groundAhead = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
@@ -91,22 +91,17 @@ public class E_Shroom : MonoBehaviour
     void Flip()
     {
         isFacingRight = !isFacingRight;
-
         Vector3 scale = transform.localScale;
         scale.x = Mathf.Abs(scale.x) * (isFacingRight ? 1 : -1);
         transform.localScale = scale;
-
-        // Los checks hijos giran automáticamente
     }
 
     IEnumerator AttackRoutine()
     {
         isAttacking = true;
         attackTimer = attackCooldown;
-
         rb.linearVelocity = Vector2.zero;
 
-        // Mirar al player
         if ((player.position.x - transform.position.x) > 0 && !isFacingRight) Flip();
         if ((player.position.x - transform.position.x) < 0 && isFacingRight) Flip();
 
@@ -117,35 +112,21 @@ public class E_Shroom : MonoBehaviour
         if (!isDead && projectilePrefab != null)
         {
             GameObject proj = Instantiate(projectilePrefab, firePoint.position, Quaternion.identity);
+            Projectile_Shroom p = proj.GetComponent<Projectile_Shroom>();
+
             Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
-            proj.GetComponent<Projectile_Shroom>().SetDirection(dir);
+            p.SetDirection(dir);
+            p.SetDamage(damageToPlayer);
         }
 
         yield return new WaitForSeconds(0.4f);
-
         isAttacking = false;
     }
 
     void UpdateAnimations()
     {
         if (isDead) return;
-
-        bool moving = Mathf.Abs(rb.linearVelocity.x) > 0.1f;
-        anim.SetBool("Run", moving);
-    }
-
-    // === MODIFICACIÓN: Desactivado para evitar doble daño ===
-    // La lógica de daño ahora reside en PlayerAttackHitbox.cs
-    private void OnTriggerEnter2D(Collider2D other)
-    {
-        if (isDead) return;
-
-        /* LOGICA MOVIDA AL HITBOX DEL JUGADOR
-        if (other.CompareTag("PlayerAttack"))
-        {
-            TakeDamage(1);
-        }
-        */
+        anim.SetBool("Run", Mathf.Abs(rb.linearVelocity.x) > 0.1f);
     }
 
     public void TakeDamage(int dmg)
@@ -153,16 +134,11 @@ public class E_Shroom : MonoBehaviour
         if (isDead) return;
 
         health -= dmg;
-        
-        // Si sigue vivo, Hit, si no, morirá en el Update o aquí mismo.
+
         if (health > 0)
-        {
             anim.SetTrigger("Hit");
-        }
         else
-        {
             Die();
-        }
     }
 
     void Die()
@@ -170,7 +146,6 @@ public class E_Shroom : MonoBehaviour
         if (isDead) return;
 
         isDead = true;
-
         rb.linearVelocity = Vector2.zero;
         rb.simulated = false;
         GetComponent<Collider2D>().enabled = false;
