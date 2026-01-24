@@ -28,6 +28,24 @@ public class GameManager : MonoBehaviour
     public bool hasDashAbility = false;
     public Transform playerTransform;
     public int playerPoints;
+    
+    // ===== REGENERACIÓN DE VIDA =====
+    [Header("Health Regeneration")]
+    [SerializeField] float regenDelay = 15f;
+    [Tooltip("Tiempo en segundos sin recibir daño antes de empezar a regenerar")]
+    [SerializeField] int regenAmount = 1;
+    [Tooltip("Cantidad de vida que se regenera")]
+    [SerializeField] float regenInterval = 1f;
+    [Tooltip("Intervalo en segundos entre cada regeneración")]
+    
+    private float timeSinceLastDamage = 0f;
+    private float regenTimer = 0f;
+    private bool isRegenerating = false;
+
+    // ===== NUEVO: AUDIO SETTINGS =====
+    [Header("Audio Settings")]
+    [Tooltip("El índice del sonido de dolor en la librería SFX del AudioManager")]
+    public int playerHurtSfxIndex = 0; 
 
     // ===== GLOBAL AI & ENEMIGOS =====
     [Header("Enemies & AI")]
@@ -65,7 +83,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // ESTO ES CLAVE: Evita que el juego se freezee al resetear varias veces
+    // Evita errores al destruir el objeto
     private void OnDestroy()
     {
         if (instance == this)
@@ -87,6 +105,11 @@ public class GameManager : MonoBehaviour
         occupiedWeakSpots.Clear();
         activeEnemies.Clear();
         timeRemaining = 0;
+        
+        // Reset regeneración
+        timeSinceLastDamage = 0f;
+        regenTimer = 0f;
+        isRegenerating = false;
 
         if (playerTransform == null)
         {
@@ -103,6 +126,9 @@ public class GameManager : MonoBehaviour
     {
         playerHealth = Mathf.Clamp(playerHealth, 0, maxHealth);
 
+        // Sistema de regeneración
+        HandleHealthRegeneration();
+
         if (isTimerActive)
         {
             timeRemaining -= Time.deltaTime;
@@ -114,16 +140,63 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void HandleHealthRegeneration()
+    {
+        // Solo regenerar si no está a vida máxima
+        if (playerHealth >= maxHealth)
+        {
+            isRegenerating = false;
+            timeSinceLastDamage = 0f;
+            regenTimer = 0f;
+            return;
+        }
+
+        // Incrementar el tiempo desde el último daño
+        timeSinceLastDamage += Time.deltaTime;
+
+        // Verificar si ha pasado el tiempo suficiente para empezar a regenerar
+        if (timeSinceLastDamage >= regenDelay)
+        {
+            if (!isRegenerating)
+            {
+                isRegenerating = true;
+                regenTimer = 0f;
+            }
+
+            // Timer de regeneración
+            regenTimer += Time.deltaTime;
+
+            if (regenTimer >= regenInterval)
+            {
+                HealPlayer(regenAmount);
+                regenTimer = 0f;
+            }
+        }
+    }
+
     // --- MEJORAS ---
     public void UpgradeJump(float amount) { currentJumpForce += amount; }
     public void UpgradeSpeed(float amount) { currentMoveSpeed += amount; }
     public void UpgradeDamage(int amount) { playerDamage += amount; }
     public void UnlockDash() { hasDashAbility = true; }
 
-    // --- VIDA ---
+    // --- VIDA (MODIFICADO PARA SONIDO Y REGENERACIÓN) ---
     public void TakeDamage(int damage)
     {
         playerHealth -= damage;
+
+        // Resetear el timer de regeneración
+        timeSinceLastDamage = 0f;
+        isRegenerating = false;
+        regenTimer = 0f;
+
+        // === SONIDO DE DOLOR ===
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(playerHurtSfxIndex);
+        }
+        // =======================
+
         if (playerHealth <= 0)
         {
             playerHealth = 0; // Evita valores negativos

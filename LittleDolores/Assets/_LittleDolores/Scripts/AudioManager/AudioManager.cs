@@ -62,6 +62,15 @@ public class AudioManager : MonoBehaviour
         sfxSource.PlayOneShot(sfxLibrary[sfxToPlay]);
     }
 
+    // ===== NUEVO: PlaySFX con volumen personalizado =====
+    public void PlaySFX(int sfxToPlay, float volume)
+    {
+        if (sfxToPlay < 0 || sfxToPlay >= sfxLibrary.Length) return;
+
+        sfxSource.PlayOneShot(sfxLibrary[sfxToPlay], volume);
+    }
+    // ====================================================
+
     public void PlayVoicelines(int voicelinesToPlay)
     {
         if (voicelinesToPlay < 0 || voicelinesToPlay >= voicelinesLibrary.Length) return;

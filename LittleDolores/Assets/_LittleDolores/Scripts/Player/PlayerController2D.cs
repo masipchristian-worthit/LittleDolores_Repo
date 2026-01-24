@@ -30,6 +30,11 @@ public class PlayerController2D : MonoBehaviour
 
     public BoxCollider2D groundCheckCollider;
 
+    [Header("Wall Detection")]
+    [SerializeField] Transform wallCheck;
+    [SerializeField] float wallCheckDistance = 0.2f;
+    [SerializeField] LayerMask wallLayer;
+
     [Header("Attack Hitbox")]
     [SerializeField] BoxCollider2D attackHitbox;
 
@@ -46,7 +51,19 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] float flashDuration = 0.15f;
     [SerializeField] int flashCount = 3;
 
+    [Header("AUDIO")]
+    [SerializeField] int landingSoundIndex = 0;
+    [Tooltip("Índice del sonido de aterrizaje en el sfxLibrary del AudioManager")]
+    [SerializeField] [Range(0f, 1f)] float landingSoundVolume = 1f;
+    [Tooltip("Volumen del sonido de aterrizaje (0 = silencio, 1 = máximo)")]
+    
+    [SerializeField] int dashSoundIndex = 1;
+    [Tooltip("Índice del sonido de dash en el sfxLibrary del AudioManager")]
+    [SerializeField] [Range(0f, 1f)] float dashSoundVolume = 1f;
+    [Tooltip("Volumen del sonido de dash (0 = silencio, 1 = máximo)")]
+
     private Coroutine currentFlashRoutine;
+    private int lastKnownHealth;
 
     Rigidbody2D playerRb;
     Animator anim;
@@ -61,6 +78,7 @@ public class PlayerController2D : MonoBehaviour
     bool isDashing;
     bool canDash = true;
     bool isFacingRight = true;
+    bool wasGrounded;
 
     float coyoteTimeCounter;
     float jumpBufferCounter;
@@ -93,6 +111,13 @@ public class PlayerController2D : MonoBehaviour
     void Start()
     {
         isFacingRight = true;
+        wasGrounded = isGrounded;
+        
+        // Inicializar la salud conocida
+        if (GameManager.Instance != null)
+        {
+            lastKnownHealth = GameManager.Instance.playerHealth;
+        }
     }
 
     void Update()
@@ -101,6 +126,15 @@ public class PlayerController2D : MonoBehaviour
         if (GameManager.Instance != null) currentSpeed = GameManager.Instance.currentMoveSpeed;
 
         CheckGround();
+        CheckHealthChange();
+        
+        // Detectar cuando el jugador aterriza
+        if (isGrounded && !wasGrounded)
+        {
+            OnLanding();
+        }
+        wasGrounded = isGrounded;
+
         AnimationManager();
 
         if (isGrounded) coyoteTimeCounter = coyoteTime;
@@ -121,7 +155,24 @@ public class PlayerController2D : MonoBehaviour
             float targetSpeed = currentSpeed;
             if (playerRb.linearVelocity.y < 0 || !isGrounded) targetSpeed /= airSpeedDivisor;
 
-            playerRb.linearVelocity = new Vector2(moveInput.x * targetSpeed, playerRb.linearVelocity.y);
+            // Detectar pared para evitar que se pegue
+            bool hitWall = false;
+            if (wallCheck != null)
+            {
+                hitWall = Physics2D.Raycast(wallCheck.position, isFacingRight ? Vector2.right : Vector2.left, 
+                    wallCheckDistance, wallLayer);
+            }
+
+            // Solo aplicar velocidad horizontal si no está tocando una pared o si se está moviendo en dirección contraria
+            if (!hitWall || Mathf.Sign(moveInput.x) != (isFacingRight ? 1 : -1))
+            {
+                playerRb.linearVelocity = new Vector2(moveInput.x * targetSpeed, playerRb.linearVelocity.y);
+            }
+            else
+            {
+                // Si está contra la pared, eliminar la velocidad horizontal
+                playerRb.linearVelocity = new Vector2(0, playerRb.linearVelocity.y);
+            }
 
             if (moveInput.x > 0 && !isFacingRight) Flip();
             if (moveInput.x < 0 && isFacingRight) Flip();
@@ -207,6 +258,35 @@ public class PlayerController2D : MonoBehaviour
         }
     }
 
+    void OnLanding()
+    {
+        // Reproducir sonido de aterrizaje con volumen personalizado
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(landingSoundIndex, landingSoundVolume);
+        }
+    }
+
+    void CheckHealthChange()
+    {
+        if (GameManager.Instance == null) return;
+
+        int currentHealth = GameManager.Instance.playerHealth;
+
+        // Detectar daño
+        if (currentHealth < lastKnownHealth)
+        {
+            VisualDamage();
+        }
+        // Detectar curación
+        else if (currentHealth > lastKnownHealth)
+        {
+            VisualHeal();
+        }
+
+        lastKnownHealth = currentHealth;
+    }
+
     public void OnMove(InputAction.CallbackContext context)
     {
         moveInput = context.ReadValue<Vector2>();
@@ -276,6 +356,12 @@ public class PlayerController2D : MonoBehaviour
         canDash = false;
         isDashing = true;
 
+        // Reproducir sonido de dash con volumen personalizado
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(dashSoundIndex, dashSoundVolume);
+        }
+
         float originalGravity = playerRb.gravityScale;
         playerRb.gravityScale = 0;
 
@@ -299,6 +385,8 @@ public class PlayerController2D : MonoBehaviour
 
     public void VisualDamage()
     {
+        if (spriteRenderer == null) return;
+
         if (currentFlashRoutine != null)
         {
             StopCoroutine(currentFlashRoutine);
@@ -309,6 +397,8 @@ public class PlayerController2D : MonoBehaviour
 
     public void VisualHeal()
     {
+        if (spriteRenderer == null) return;
+
         if (currentFlashRoutine != null)
         {
             StopCoroutine(currentFlashRoutine);
@@ -319,7 +409,9 @@ public class PlayerController2D : MonoBehaviour
 
     IEnumerator FlashRoutine(Color targetColor)
     {
-        Color originalColor = Color.white;
+        if (spriteRenderer == null) yield break;
+
+        Color originalColor = spriteRenderer.color;
 
         for (int i = 0; i < flashCount; i++)
         {
@@ -330,6 +422,8 @@ public class PlayerController2D : MonoBehaviour
             yield return new WaitForSeconds(flashDuration);
         }
 
+        // Asegurar que el sprite vuelva al color original
+        spriteRenderer.color = originalColor;
         currentFlashRoutine = null;
     }
 
@@ -339,6 +433,13 @@ public class PlayerController2D : MonoBehaviour
         {
             Gizmos.color = Color.green;
             Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
+        }
+
+        if (wallCheck != null)
+        {
+            Gizmos.color = Color.red;
+            Vector3 direction = isFacingRight ? Vector3.right : Vector3.left;
+            Gizmos.DrawRay(wallCheck.position, direction * wallCheckDistance);
         }
     }
 }

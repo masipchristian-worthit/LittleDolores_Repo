@@ -27,6 +27,24 @@ public class triggerBossAttack : MonoBehaviour
     [Header("Daño de ataques")]
     public int dañoAttack1 = 1; // Ataque 1 y 3 comparten el mismo daño
 
+    [Header("Audio - Attack 1")]
+    [SerializeField] int attack1SoundIndex = 0;
+    [Tooltip("Índice del sonido del ataque 1 en el sfxLibrary del AudioManager")]
+    [SerializeField] [Range(0f, 1f)] float attack1Volume = 1f;
+    [Tooltip("Volumen del sonido del ataque 1")]
+
+    [Header("Audio - Attack 2")]
+    [SerializeField] int attack2SoundIndex = 1;
+    [Tooltip("Índice del sonido del ataque 2 en el sfxLibrary del AudioManager")]
+    [SerializeField] [Range(0f, 1f)] float attack2Volume = 1f;
+    [Tooltip("Volumen del sonido del ataque 2")]
+
+    [Header("Audio - Attack 3")]
+    [SerializeField] int attack3SoundIndex = 2;
+    [Tooltip("Índice del sonido del ataque 3 en el sfxLibrary del AudioManager")]
+    [SerializeField] [Range(0f, 1f)] float attack3Volume = 1f;
+    [Tooltip("Volumen del sonido del ataque 3")]
+
     private bool inside = false;
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -64,6 +82,7 @@ public class triggerBossAttack : MonoBehaviour
         if (playerTransform == null) return;
 
         MostrarTexto(textoAttack1);
+        PlayAttackSound(attack1SoundIndex, attack1Volume);
 
         Vector3 spawnPos = playerTransform.position + Vector3.right * 5f;
         GameObject obj = Instantiate(action1Prefab, spawnPos, Quaternion.identity);
@@ -72,7 +91,7 @@ public class triggerBossAttack : MonoBehaviour
         if (rb != null)
         {
             rb.gravityScale = 0;
-            rb.linearVelocity = Vector2.left * attack1Speed; // corregido
+            rb.linearVelocity = Vector2.left * attack1Speed;
         }
 
         // Asignar daño y tiempo de apagado
@@ -90,6 +109,7 @@ public class triggerBossAttack : MonoBehaviour
         if (action2Prefab == null || playerTransform == null) return;
 
         MostrarTexto(textoAttack2);
+        PlayAttackSound(attack2SoundIndex, attack2Volume);
 
         Vector3 spawnPos = new Vector3(
             playerTransform.position.x,
@@ -103,7 +123,7 @@ public class triggerBossAttack : MonoBehaviour
         if (rb != null)
         {
             rb.gravityScale = 0;
-            rb.linearVelocity = Vector2.down * attack2Speed; // corregido
+            rb.linearVelocity = Vector2.down * attack2Speed;
         }
 
         StartCoroutine(DesactivarDespues(obj, 1f));
@@ -115,6 +135,7 @@ public class triggerBossAttack : MonoBehaviour
         if (spawn3 == null || action3Prefab == null) return;
 
         MostrarTexto(textoAttack3);
+        PlayAttackSound(attack3SoundIndex, attack3Volume);
         StartCoroutine(Attack3ConDelay());
     }
 
@@ -142,6 +163,15 @@ public class triggerBossAttack : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         if (obj != null)
             obj.SetActive(false);
+    }
+
+    // ===================== AUDIO =====================
+    void PlayAttackSound(int soundIndex, float volume)
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFX(soundIndex, volume);
+        }
     }
 
     // ===================== TEXTO UI =====================

@@ -27,11 +27,18 @@ public class E_Shroom : MonoBehaviour
     [SerializeField] Transform lowerWallCheck;
     [SerializeField] float lowerWallCheckRadius = 0.1f;
 
+    [Header("AUDIO")]
+    [SerializeField] int idleSoundIndex = 0;
+    [Tooltip("Índice del sonido idle en el sfxLibrary del AudioManager")]
+    [SerializeField] float minIdleSoundInterval = 10f;
+    [SerializeField] float maxIdleSoundInterval = 20f;
+
     Rigidbody2D rb;
     Animator anim;
     Transform player;
 
     float attackTimer;
+    float idleSoundTimer;
     bool isDead;
     bool isAttacking;
     bool isFacingRight = true;
@@ -46,6 +53,9 @@ public class E_Shroom : MonoBehaviour
     {
         if (GameManager.Instance && GameManager.Instance.playerTransform)
             player = GameManager.Instance.playerTransform;
+
+        // Inicializar el timer con un valor aleatorio
+        ResetIdleSoundTimer();
     }
 
     void Update()
@@ -56,6 +66,14 @@ public class E_Shroom : MonoBehaviour
         if (isDead || player == null) return;
 
         attackTimer -= Time.deltaTime;
+
+        // Timer para el sonido idle
+        idleSoundTimer -= Time.deltaTime;
+        if (idleSoundTimer <= 0f)
+        {
+            PlayIdleSound();
+            ResetIdleSoundTimer();
+        }
 
         float dist = Vector2.Distance(transform.position, player.position);
 
@@ -127,6 +145,20 @@ public class E_Shroom : MonoBehaviour
     {
         if (isDead) return;
         anim.SetBool("Run", Mathf.Abs(rb.linearVelocity.x) > 0.1f);
+    }
+
+    void PlayIdleSound()
+    {
+        if (AudioManager.Instance != null && !isDead)
+        {
+            AudioManager.Instance.PlaySFX(idleSoundIndex);
+        }
+    }
+
+    void ResetIdleSoundTimer()
+    {
+        // Establecer un tiempo aleatorio entre min y max
+        idleSoundTimer = Random.Range(minIdleSoundInterval, maxIdleSoundInterval);
     }
 
     public void TakeDamage(int dmg)
