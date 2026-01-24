@@ -10,6 +10,10 @@ public class LeverSwitch : MonoBehaviour
     [SerializeField] GameObject objectToTurnOff;
     [SerializeField] GameObject objectToTurnOn;
 
+    [Header("Additional Objects To Activate")]
+    [SerializeField] GameObject additionalObject1;
+    [SerializeField] GameObject additionalObject2;
+
     [Header("State")]
     [SerializeField] bool isOn = false;
 
@@ -33,6 +37,13 @@ public class LeverSwitch : MonoBehaviour
 
         if (objectToTurnOn)
             objectToTurnOn.SetActive(isOn);
+
+        // Activar los objetos adicionales cuando la palanca está ON
+        if (additionalObject1 != null)
+            additionalObject1.SetActive(isOn);
+
+        if (additionalObject2 != null)
+            additionalObject2.SetActive(isOn);
     }
 
     void Toggle()
@@ -43,7 +54,6 @@ public class LeverSwitch : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // El collider de interacción del Player
         if (!canInteract) return;
 
         if (other.CompareTag("PlayerInteract"))

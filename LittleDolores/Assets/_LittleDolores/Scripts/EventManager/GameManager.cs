@@ -20,14 +20,12 @@ public class GameManager : MonoBehaviour
 
     // ===== ESTADÍSTICAS DEL JUGADOR =====
     [Header("Player Stats")]
-    public int maxHealth = 10;        // Vida máxima del jugador
-    public int playerHealth = 10;     // Vida actual del jugador
-
-    public int playerDamage = 1;       // Daño total
+    public int maxHealth = 10;
+    public int playerHealth = 10;
+    public int playerDamage = 1;
     public float currentMoveSpeed = 10f;
     public float currentJumpForce = 15f;
     public bool hasDashAbility = false;
-
     public Transform playerTransform;
     public int playerPoints;
 
@@ -56,25 +54,39 @@ public class GameManager : MonoBehaviour
         {
             instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // Suscribirse al evento de carga de escena solo una vez
+            SceneManager.sceneLoaded += OnSceneLoaded;
         }
         else if (instance != this)
         {
             Destroy(gameObject);
             return;
         }
+    }
 
-        SceneManager.sceneLoaded += OnSceneLoaded;
+    // ESTO ES CLAVE: Evita que el juego se freezee al resetear varias veces
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Reset de estados al cargar la escena
+        // Forzamos que el tiempo siempre sea 1 al empezar cualquier escena
+        Time.timeScale = 1f;
+
+        // Reset de estados lógicos
         enemiesAreUnhappy = false;
         firstKillTriggered = false;
         isTimerActive = false;
         currentDefenders = 0;
         occupiedWeakSpots.Clear();
         activeEnemies.Clear();
+        timeRemaining = 0;
 
         if (playerTransform == null)
         {
@@ -83,42 +95,38 @@ public class GameManager : MonoBehaviour
                 playerTransform = p.transform;
         }
 
-        Time.timeScale = 1f;
-
         if (gameOverPanel) gameOverPanel.SetActive(false);
         if (victoryPanel) victoryPanel.SetActive(false);
     }
 
     private void Update()
     {
-        // Limitar la vida del jugador entre 0 y maxHealth
         playerHealth = Mathf.Clamp(playerHealth, 0, maxHealth);
 
-        // Timer de escena
         if (isTimerActive)
         {
             timeRemaining -= Time.deltaTime;
             if (timeRemaining <= 0)
             {
+                timeRemaining = 0;
                 TriggerGameOver();
             }
         }
     }
 
-    // =========================================================
-    // MÉTODOS PARA POWERUPS / MEJORAS
-    // =========================================================
+    // --- MEJORAS ---
     public void UpgradeJump(float amount) { currentJumpForce += amount; }
     public void UpgradeSpeed(float amount) { currentMoveSpeed += amount; }
     public void UpgradeDamage(int amount) { playerDamage += amount; }
     public void UnlockDash() { hasDashAbility = true; }
 
-    // --- GESTIÓN DE VIDA DEL PLAYER ---
+    // --- VIDA ---
     public void TakeDamage(int damage)
     {
         playerHealth -= damage;
         if (playerHealth <= 0)
         {
+            playerHealth = 0; // Evita valores negativos
             TriggerGameOver();
         }
     }
@@ -126,27 +134,23 @@ public class GameManager : MonoBehaviour
     public void HealPlayer(int amount)
     {
         playerHealth += amount;
-        if (playerHealth > maxHealth)
-            playerHealth = maxHealth;
+        if (playerHealth > maxHealth) playerHealth = maxHealth;
     }
 
     // --- GESTIÓN ENEMIGOS ---
     public void RegisterEnemy(GShroomEnemy enemy)
     {
-        if (!activeEnemies.Contains(enemy))
-            activeEnemies.Add(enemy);
+        if (!activeEnemies.Contains(enemy)) activeEnemies.Add(enemy);
     }
 
     public void UnregisterEnemy(GShroomEnemy enemy)
     {
-        if (activeEnemies.Contains(enemy))
-            activeEnemies.Remove(enemy);
+        if (activeEnemies.Contains(enemy)) activeEnemies.Remove(enemy);
 
         if (activeEnemies.Count == 0 && isTimerActive)
         {
             isTimerActive = false;
-            if (victoryPanel)
-                victoryPanel.SetActive(true);
+            if (victoryPanel) victoryPanel.SetActive(true);
         }
     }
 
@@ -155,8 +159,7 @@ public class GameManager : MonoBehaviour
         if (!enemiesAreUnhappy)
             enemiesAreUnhappy = true;
 
-        string sceneName = SceneManager.GetActiveScene().name;
-        if ((sceneName == "SCN_Aldea1" || sceneName == "SCN_Aldea2") && !firstKillTriggered)
+        if (!firstKillTriggered)
         {
             timeRemaining = sceneTimeLimit;
             isTimerActive = true;
@@ -164,21 +167,21 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- GAME OVER / REINTENTO ---
-    void TriggerGameOver()
+    // --- GAME OVER ---
+    public void TriggerGameOver()
     {
+        if (Time.timeScale == 0f) return; // Evita disparar el Game Over varias veces
+
         isTimerActive = false;
         Time.timeScale = 0f;
+
         if (gameOverPanel) gameOverPanel.SetActive(true);
+
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
     }
 
-    public void RetryScene()
-    {
-        Time.timeScale = 1f;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-    }
-
-    // --- UTILIDADES IA / DEFENSA ---
+    // --- IA / SPOTS ---
     public bool TryClaimWeakSpot(Transform spot)
     {
         if (occupiedWeakSpots.Contains(spot)) return false;
@@ -204,7 +207,6 @@ public class GameManager : MonoBehaviour
 
     public void LeaveDefense()
     {
-        if (currentDefenders > 0)
-            currentDefenders--;
+        if (currentDefenders > 0) currentDefenders--;
     }
 }

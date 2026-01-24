@@ -16,7 +16,7 @@ public class BossHealthUI : MonoBehaviour
     {
         if (boss == null || healthFill == null) return;
 
-        float targetFill = (float)boss.CurrentLife / (float)boss.MaxLife;
+        float targetFill = (float)boss.currentLife / (float)boss.maxLife;
         healthFill.fillAmount = Mathf.Lerp(healthFill.fillAmount, targetFill, Time.deltaTime * smoothSpeed);
     }
 }

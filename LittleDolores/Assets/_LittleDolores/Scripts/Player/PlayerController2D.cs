@@ -27,23 +27,24 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
     [SerializeField] LayerMask groundLayer;
     [SerializeField] bool isGrounded;
-    
-    public BoxCollider2D groundCheckCollider; 
+
+    public BoxCollider2D groundCheckCollider;
 
     [Header("Attack Hitbox")]
     [SerializeField] BoxCollider2D attackHitbox;
+
     [Tooltip("Tag the attack hitbox GameObject as 'PlayerAttack' - Remove PlayerAttackHitbox and PlayerWeapon scripts!")]
 
     [Header("Interact Hitbox")]
-    [SerializeField] Collider2D interactCollider;     
-    [SerializeField] float interactActiveTime = 1f;   
+    [SerializeField] Collider2D interactCollider;
+    [SerializeField] float interactActiveTime = 1f;
 
     [Header("FEEDBACK VISUAL")]
-    [SerializeField] SpriteRenderer spriteRenderer; 
-    [SerializeField] Color damageColor = new Color(1f, 0f, 0f, 0.5f); // Rojo semi-transparente
-    [SerializeField] Color healColor = new Color(0f, 1f, 0f, 0.5f);   // Verde semi-transparente
+    [SerializeField] SpriteRenderer spriteRenderer;
+    [SerializeField] Color damageColor = new Color(1f, 0f, 0f, 0.5f);
+    [SerializeField] Color healColor = new Color(0f, 1f, 0f, 0.5f);
     [SerializeField] float flashDuration = 0.15f;
-    [SerializeField] int flashCount = 3; // Cuántas veces parpadea
+    [SerializeField] int flashCount = 3;
 
     private Coroutine currentFlashRoutine;
 
@@ -63,13 +64,13 @@ public class PlayerController2D : MonoBehaviour
 
     float coyoteTimeCounter;
     float jumpBufferCounter;
-    float attackBufferCounter; // NEW: Attack input buffer
+    float attackBufferCounter;
     float defaultGravity;
-    
+
     [Header("Attack Buffer")]
     [SerializeField] float attackBufferTime = 0.2f;
 
-     [Header("AnimationBools")]
+    [Header("AnimationBools")]
     bool isJumping => playerRb.linearVelocity.y > 0.1f && !isGrounded;
     bool isFalling => playerRb.linearVelocity.y < -0.1f && !isGrounded && !isJumping;
     bool isMoving => Mathf.Abs(playerRb.linearVelocity.x) > 0.1f;
@@ -96,20 +97,17 @@ public class PlayerController2D : MonoBehaviour
 
     void Update()
     {
-        float currentSpeed = 5f; 
+        float currentSpeed = 5f;
         if (GameManager.Instance != null) currentSpeed = GameManager.Instance.currentMoveSpeed;
 
         CheckGround();
-        
         AnimationManager();
 
-        // Timers
         if (isGrounded) coyoteTimeCounter = coyoteTime;
         else coyoteTimeCounter -= Time.deltaTime;
 
         if (jumpBufferCounter > 0) jumpBufferCounter -= Time.deltaTime;
 
-        // Jump - Can't jump during attack or dash
         if (jumpBufferCounter > 0 && coyoteTimeCounter > 0 && canJump && !isAttacking && !isDashing)
         {
             jumpRequest = true;
@@ -118,12 +116,11 @@ public class PlayerController2D : MonoBehaviour
 
         if (!isDashing) ApplyGravityScale();
 
-        // Movement - Blocked by attack AND dash
         if (!isAttacking && !isDashing)
         {
             float targetSpeed = currentSpeed;
             if (playerRb.linearVelocity.y < 0 || !isGrounded) targetSpeed /= airSpeedDivisor;
-            
+
             playerRb.linearVelocity = new Vector2(moveInput.x * targetSpeed, playerRb.linearVelocity.y);
 
             if (moveInput.x > 0 && !isFacingRight) Flip();
@@ -144,7 +141,7 @@ public class PlayerController2D : MonoBehaviour
     {
         if (anim == null) return;
 
-        if(isGrounded) anim.SetBool("Grounded", true);
+        if (isGrounded) anim.SetBool("Grounded", true);
         else anim.SetBool("Grounded", false);
 
         if (isMoving) anim.SetBool("Run", true);
@@ -155,8 +152,8 @@ public class PlayerController2D : MonoBehaviour
 
         if (isFalling) anim.SetBool("Fall", true);
         else anim.SetBool("Fall", false);
-}
-    
+    }
+
     void Jump()
     {
         float currentJumpForce = 15f;
@@ -172,9 +169,9 @@ public class PlayerController2D : MonoBehaviour
         Invoke(nameof(ResetJump), jumpCooldown);
     }
 
-    void ResetJump() 
-    { 
-        canJump = true; 
+    void ResetJump()
+    {
+        canJump = true;
     }
 
     void Flip()
@@ -187,12 +184,15 @@ public class PlayerController2D : MonoBehaviour
 
     void ApplyGravityScale()
     {
-        if (playerRb.linearVelocity.y < 0) playerRb.gravityScale = defaultGravity * fallMultiplier;
-        else if (playerRb.linearVelocity.y > 0 && !isJumpPressed) playerRb.gravityScale = defaultGravity * lowJumpMultiplier;
-        else playerRb.gravityScale = defaultGravity;
+        if (playerRb.linearVelocity.y < 0)
+            playerRb.gravityScale = defaultGravity * fallMultiplier;
+        else if (playerRb.linearVelocity.y > 0 && !isJumpPressed)
+            playerRb.gravityScale = defaultGravity * lowJumpMultiplier;
+        else
+            playerRb.gravityScale = defaultGravity;
 
         if (playerRb.linearVelocity.y < -maxFallSpeed)
-             playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, -maxFallSpeed);
+            playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, -maxFallSpeed);
     }
 
     void CheckGround()
@@ -207,7 +207,6 @@ public class PlayerController2D : MonoBehaviour
         }
     }
 
-
     public void OnMove(InputAction.CallbackContext context)
     {
         moveInput = context.ReadValue<Vector2>();
@@ -215,12 +214,12 @@ public class PlayerController2D : MonoBehaviour
 
     public void OnJump(InputAction.CallbackContext context)
     {
-        if (context.started) 
-        { 
-            jumpBufferCounter = jumpBufferTime; 
-            isJumpPressed = true; 
+        if (context.started)
+        {
+            jumpBufferCounter = jumpBufferTime;
+            isJumpPressed = true;
         }
-        if (context.canceled) isJumpPressed = false; 
+        if (context.canceled) isJumpPressed = false;
     }
 
     public void OnAttack(InputAction.CallbackContext context)
@@ -235,7 +234,7 @@ public class PlayerController2D : MonoBehaviour
     {
         if (context.performed && !isAttacking)
         {
-            if (interactCollider != null) 
+            if (interactCollider != null)
             {
                 interactCollider.enabled = true;
                 Invoke(nameof(DeactivateInteractCollider), interactActiveTime);
@@ -261,33 +260,25 @@ public class PlayerController2D : MonoBehaviour
 
     IEnumerator AttackRoutine()
     {
-       
-        canAttack = false; 
+        canAttack = false;
         isAttacking = true;
-        
-        if(anim != null) anim.SetTrigger("Attack");
 
-         /*
-        if (attackHitbox != null) attackHitbox.enabled = true;
+        if (anim != null) anim.SetTrigger("Attack");
 
-        yield return new WaitForSeconds(0.2f); 
-        
-        if (attackHitbox != null) attackHitbox.enabled = false;
-        */
-        yield return new WaitForSeconds(0.3f); 
-        
-        isAttacking = false; 
+        yield return new WaitForSeconds(0.3f);
+
+        isAttacking = false;
         canAttack = true;
     }
 
     IEnumerator DashRoutine()
     {
-        canDash = false; 
+        canDash = false;
         isDashing = true;
-        
+
         float originalGravity = playerRb.gravityScale;
         playerRb.gravityScale = 0;
-        
+
         float dir = isFacingRight ? 1 : -1;
         if (moveInput.x != 0) dir = Mathf.Sign(moveInput.x);
 
@@ -306,16 +297,13 @@ public class PlayerController2D : MonoBehaviour
         canDash = true;
     }
 
-    //FEEDBACK VISUAL
     public void VisualDamage()
     {
-        // 1. Si ya hay un parpadeo ocurriendo, detenemos SOLO ese.
         if (currentFlashRoutine != null)
         {
             StopCoroutine(currentFlashRoutine);
         }
-        
-        // 2. Iniciamos el nuevo y guardamos la referencia
+
         currentFlashRoutine = StartCoroutine(FlashRoutine(damageColor));
     }
 
@@ -325,13 +313,13 @@ public class PlayerController2D : MonoBehaviour
         {
             StopCoroutine(currentFlashRoutine);
         }
+
         currentFlashRoutine = StartCoroutine(FlashRoutine(healColor));
     }
 
     IEnumerator FlashRoutine(Color targetColor)
     {
-        // Asumimos blanco por defecto, si tu sprite tiene otro color base, cámbialo aquí
-        Color originalColor = Color.white; 
+        Color originalColor = Color.white;
 
         for (int i = 0; i < flashCount; i++)
         {
@@ -342,14 +330,12 @@ public class PlayerController2D : MonoBehaviour
             yield return new WaitForSeconds(flashDuration);
         }
 
-        // Limpiamos la referencia al terminar
         currentFlashRoutine = null;
     }
 
-    //Dibujado de Gizmos
     private void OnDrawGizmos()
     {
-        if (groundCheck != null) 
+        if (groundCheck != null)
         {
             Gizmos.color = Color.green;
             Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);

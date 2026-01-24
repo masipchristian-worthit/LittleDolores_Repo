@@ -6,12 +6,17 @@ public class HealthUI : MonoBehaviour
     [Header("UI Elements")]
     [SerializeField] private Image healthFill;  // Imagen que tiene Image Type = Filled, Horizontal
 
+    [Header("Smooth Fill")]
+    [SerializeField] private float smoothSpeed = 5f; // Para suavizar la barra
+
     void Update()
     {
-        if (GameManager.Instance == null) return;
+        if (GameManager.Instance == null || healthFill == null) return;
 
-        // Convertimos a float para evitar división entera
-        float fill = (float)GameManager.Instance.playerHealth / (float)GameManager.Instance.maxHealth;
-        healthFill.fillAmount = Mathf.Clamp01(fill); // Entre 0 y 1
+        // Calcula el porcentaje de vida
+        float targetFill = (float)GameManager.Instance.playerHealth / (float)GameManager.Instance.maxHealth;
+
+        // Actualiza la barra suavemente
+        healthFill.fillAmount = Mathf.Lerp(healthFill.fillAmount, targetFill, Time.deltaTime * smoothSpeed);
     }
 }

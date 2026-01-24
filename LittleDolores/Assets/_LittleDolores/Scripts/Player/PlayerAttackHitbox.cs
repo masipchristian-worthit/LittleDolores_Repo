@@ -1,27 +1,29 @@
 using UnityEngine;
 
-public class PlayerAttackHitbox : MonoBehaviour
+public class PlayerAttack : MonoBehaviour
 {
+    public int attackDamage = 1;
+
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // 1. FILTRO DE SEGURIDAD: Solo atacamos a cosas marcadas como "Enemy"
-        // Si la nueva seta no tiene este Tag, el código se detiene aquí.
-        if (other.CompareTag("Enemy"))
+        // 1. Intentar dañar al Boss (mantiene funcionalidad original)
+        if (other.CompareTag("Boss"))
         {
-            // Diagnóstico: Si sale esto, la física y el tag están bien.
-            Debug.Log($"[ARMA] Golpeó a: {other.name}");
-
-            // 2. OBTENER DAÑO
-            int damage = 1;
-            if (GameManager.Instance != null) 
+            Boss boss = other.GetComponent<Boss>();
+            if (boss != null)
             {
-                damage = GameManager.Instance.playerDamage;
+                boss.TakeDamage(attackDamage);
+                Debug.Log("Golpe al Boss detectado");
+                return; // Retornamos para evitar doble daño si tiene varios scripts
             }
+        }
 
-            // 3. ENVIAR DAÑO UNIVERSAL
-            // Busca la función "TakeDamage" en el objeto golpeado O en sus padres.
-            // Funciona con CUALQUIER script (Verde, Rojo, Morado, Boss) automáticamente.
-            other.SendMessageUpwards("TakeDamage", damage, SendMessageOptions.DontRequireReceiver);
+        // 2. Intentar dañar al E_Shroom
+        E_Shroom enemyShroom = other.GetComponent<E_Shroom>();
+        if (enemyShroom != null)
+        {
+            enemyShroom.TakeDamage(attackDamage);
+            Debug.Log("Golpe a E_Shroom detectado");
         }
     }
 }
